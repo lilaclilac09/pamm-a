@@ -1,0 +1,12 @@
+[program]
+name = "quasar-prop-amm"
+version = "0.1.0"
+
+[features]
+zero_copy = true
+
+[accounts]
+pool = "Pool"
+
+[instructions]
+swap = "swap"
