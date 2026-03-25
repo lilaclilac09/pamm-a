@@ -1,0 +1,22 @@
+{
+  "name": "order-book-jupiter-mm-bot",
+  "version": "1.0.0",
+  "main": "src/main.ts",
+  "type": "module",
+  "scripts": {
+    "start": "npx ts-node src/main.ts"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.92.1",
+    "@jup-ag/api": "^2.0.0",
+    "@jito-labs/jito-ts": "^1.0.0",
+    "bs58": "^5.0.0",
+    "dotenv": "^16.0.0",
+    "axios": "^1.6.0",
+    "@pythnetwork/pyth-solana-receiver": "^1.0.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
+}
