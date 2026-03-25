@@ -37,9 +37,9 @@ prop-amm-full/
 ## For more details, see docs/structure.md
 # Quasar Prop AMM
 
-高性能 Solana AMM 合约 + 链下 Oracle Bot（Jito Bundle/Tip/库存监控/波动率/LP Token/模拟/多引擎推送）
+High-performance Solana AMM contract + off-chain Oracle Bot (Jito Bundle/Tip/inventory monitoring/volatility/LP Token/simulation/multi-relay push)
 
-## 目录结构
+## Directory Structure
 
 ```
 quasar-prop-amm/
