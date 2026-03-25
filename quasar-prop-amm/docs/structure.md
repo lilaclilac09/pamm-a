@@ -1,8 +1,4 @@
-# Prop AMM Project Structure and Implementation Guide
-
-This document provides a detailed overview of the Prop AMM project, including both on-chain (Quasar) and off-chain (Rust Oracle Bot) components, best practices, and development recommendations.
-
----
+# Prop AMM Project Structure and Design
 
 ## 1. Directory Structure
 
@@ -30,47 +26,36 @@ prop-amm-full/
 ├── README.md
 ```
 
----
-
 ## 2. On-chain Contract (Quasar)
-
-- **state.rs**: Pool structure, LP token state, PDA creation
+- **state.rs**: Pool struct, LP token state, PDA creation
 - **swap.rs**: Dynamic spread + inventory skew logic
-- **update_oracle.rs**: Oracle parameter updates from off-chain bot
-- **add_liquidity.rs / remove_liquidity.rs**: LP token mint/burn logic
-
----
+- **update_oracle.rs**: Oracle parameter update from bot
+- **add_liquidity.rs/remove_liquidity.rs**: LP token mint/burn
 
 ## 3. Off-chain Oracle Bot (Rust)
-
-- Real-time reading of on-chain pool reserves (reserve0/reserve1)
-- Fetching latest price from Pyth/Chainlink every 3 seconds
-- Dynamic calculation of volatility, spread, and skew parameters
-- Building and sending UpdateOracle instructions
-- Jito Bundle + Helius Sender for prioritized submission (tip optimization, simulateBundle before send)
-- Tip/CU ratio auto-adjustment, tip instruction as last transaction in bundle
-- Simultaneous submission to Jito and Harmonic relays
-
----
+- Real-time pool reserve monitoring (reserve0/reserve1)
+- Fetch latest price from Pyth/Chainlink every 3 seconds
+- Dynamic volatility, spread, skew calculation
+- Build and send update_oracle instruction
+- Jito Bundle + Helius Sender (tip optimization, simulateBundle)
+- Tip/CU auto adjustment, tip as last bundle instruction
+- Dual relay support: Jito + Harmonic
 
 ## 4. Key Optimizations
-
-- **LP Token**: Add/Remove liquidity, share tracking
+- **LP Token**: Add/remove liquidity, share tracking
 - **PDA Creation**: Auto-initialize pool/LP accounts
-- **Tip Optimization**: Simulate and auto-adjust tip/CU
-- **Bundle Structure**: Max 5 transactions, tip last, avoid LUT
-- **Simulation First**: Use simulateBundle to ensure CU and no conflicts
+- **Tip Optimization**: Tip/CU simulation, auto adjustment
+- **Bundle Structure**: Max 5 tx, tip last, avoid LUT
+- **Simulation First**: simulateBundle to ensure CU/avoid conflicts
 
----
-
-## 5. Example Off-chain Bot Loop (Pseudocode)
+## 5. Example Bot Loop (Pseudocode)
 
 ```rust
 loop {
-    // 1. Read on-chain pool reserves
+    // 1. Read pool reserves
     let (reserve0, reserve1) = get_pool_reserves(&client, &pool_pubkey);
 
-    // 2. Fetch latest price from Pyth/Chainlink
+    // 2. Fetch latest price
     let price = get_latest_price().await?;
 
     // 3. Calculate volatility, spread, skew
@@ -78,7 +63,7 @@ loop {
     let spread = base_spread + vol_factor * vol / 10000;
     let skew = calc_skew(reserve0, reserve1, target_ratio);
 
-    // 4. Build UpdateOracle instruction
+    // 4. Build update_oracle instruction
     let ix = build_update_oracle_ix(...);
 
     // 5. Build tip instruction
@@ -100,8 +85,4 @@ loop {
 
 ---
 
-## 6. Next Steps
-
-- Fill in the actual implementation for price feeds, volatility, and bundle submission
-- Use this structure as a starting point for further development and optimization
-- For more details, see README.md or ask for specific code examples
+For further details or implementation help, see README.md or contact the project maintainer.

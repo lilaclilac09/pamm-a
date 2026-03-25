@@ -1,3 +1,40 @@
+# Project Structure and Design Overview
+
+See also: docs/structure.md for a detailed breakdown.
+
+## Directory Structure
+
+```
+prop-amm-full/
+├── programs/
+│   └── prop-amm/
+│       ├── Cargo.toml
+│       ├── Quasar.toml
+│       └── src/
+│           ├── lib.rs
+│           ├── state.rs
+│           └── instructions/
+│               ├── swap.rs
+│               ├── update_oracle.rs
+│               ├── add_liquidity.rs
+│               └── remove_liquidity.rs
+├── bot/
+│   ├── Cargo.toml
+│   ├── .env.example
+│   └── src/
+│       └── main.rs
+├── scripts/
+│   └── deploy.sh
+├── README.md
+```
+
+## Key Features
+- Dynamic spread and inventory skew logic
+- LP token support (add/remove liquidity)
+- Off-chain Oracle Bot with Jito/Harmonic bundle, tip optimization, real-time monitoring, volatility
+- Clear structure for easy extension
+
+## For more details, see docs/structure.md
 # Quasar Prop AMM
 
 高性能 Solana AMM 合约 + 链下 Oracle Bot（Jito Bundle/Tip/库存监控/波动率/LP Token/模拟/多引擎推送）
