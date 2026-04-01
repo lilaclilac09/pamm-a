@@ -1,0 +1,186 @@
+<section class="module" id="module-1" style="background: var(--color-bg)">
+  <div class="module-content">
+
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">What is an AMM?</h1>
+      <p class="module-subtitle">You're about to build a market-making robot. Let's understand what that actually means.</p>
+    </header>
+
+    <!-- Screen 1: The core idea -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Markets need someone to make prices</h2>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); box-shadow:var(--shadow-sm); border-top:3px solid #2A7B9B">
+          <div style="font-size:2.5rem; margin-bottom:var(--space-3)">🏦</div>
+          <h3 style="font-family:var(--font-display); font-size:var(--text-lg); font-weight:700; margin-bottom:var(--space-2)">Traditional Exchange</h3>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">Buyers and sellers post limit orders. A centralized <span class="term" data-definition="An order book lists all outstanding buy and sell offers at specific prices, managed by a central exchange">order book</span> matches them when prices cross. Requires active human market makers.</p>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); box-shadow:var(--shadow-sm); border-top:3px solid #D4A843">
+          <div style="font-size:2.5rem; margin-bottom:var(--space-3)">🤖</div>
+          <h3 style="font-family:var(--font-display); font-size:var(--text-lg); font-weight:700; margin-bottom:var(--space-2)">Automated Market Maker</h3>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">A <span class="term" data-definition="An Automated Market Maker is a smart contract or program that always quotes a buy and sell price using a mathematical formula, replacing the need for a human counterparty">AMM</span> uses a mathematical formula to quote prices 24/7. No humans needed — just math and <span class="term" data-definition="Liquidity refers to the pool of tokens locked into the AMM that it uses to fill trades. More liquidity = smaller price impact per trade">liquidity</span>.</p>
+        </div>
+      </div>
+
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary)">When you trade on Uniswap or any <span class="term" data-definition="Decentralized Finance — financial applications built on blockchains that operate without centralized intermediaries like banks or brokerages">DeFi</span> exchange, you're not matched with another human. You're trading directly against a pool of tokens managed by an AMM formula.</p>
+    </div>
+
+    <!-- Screen 2: Reserves and the formula -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The AMM has two buckets of tokens</h2>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-8); box-shadow:var(--shadow-md); margin-bottom:var(--space-6)">
+        <div style="display:flex; align-items:center; justify-content:center; gap:var(--space-12); flex-wrap:wrap">
+          <div style="text-align:center">
+            <div style="width:120px; height:120px; background:linear-gradient(135deg, #FDF5E0, #D4A843); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto var(--space-3); font-size:2.5rem; box-shadow:var(--shadow-md)">🪙</div>
+            <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700">Reserve X</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-1)">e.g. 1,000 tokens</div>
+          </div>
+          <div style="font-family:var(--font-display); font-size:var(--text-4xl); font-weight:800; color:var(--color-accent)">×</div>
+          <div style="text-align:center">
+            <div style="width:120px; height:120px; background:linear-gradient(135deg, #E4F2F7, #2A7B9B); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto var(--space-3); font-size:2.5rem; box-shadow:var(--shadow-md)">💵</div>
+            <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700">Reserve Y</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-1)">e.g. 2,000 USDC</div>
+          </div>
+          <div style="font-family:var(--font-display); font-size:var(--text-4xl); font-weight:800; color:var(--color-accent)">=</div>
+          <div style="text-align:center">
+            <div style="width:120px; height:120px; background:linear-gradient(135deg, #FAF7F2, #9E9790); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto var(--space-3); font-size:2rem; font-family:var(--font-mono); font-weight:700; box-shadow:var(--shadow-md)">k</div>
+            <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700">Constant</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-1)">2,000,000</div>
+          </div>
+        </div>
+        <p style="text-align:center; margin-top:var(--space-6); font-size:var(--text-sm); color:var(--color-text-secondary)">The classic <span class="term" data-definition="Constant-product formula: the product of the two reserves (x * y = k) must always stay the same after any trade. Buying X decreases reserve_x and increases reserve_y, keeping k constant">constant-product AMM</span> demands that reserve_x × reserve_y always equals the same number k. This single rule determines every price the AMM quotes.</p>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-bg-code); border-radius:var(--radius-md); padding:var(--space-6); font-family:var(--font-mono); font-size:var(--text-sm); line-height:1.8; box-shadow:var(--shadow-md)">
+        <div style="color:#6C7086; margin-bottom:var(--space-2)">// How many Y tokens do you get for Δx tokens of X?</div>
+        <div><span class="code-comment">// Before:</span> <span class="code-property">rx</span> × <span class="code-property">ry</span> = k</div>
+        <div><span class="code-comment">// After:</span> &nbsp;(rx + Δx) × <span class="code-property">ry_new</span> = k</div>
+        <div style="margin-top:var(--space-3)"><span class="code-keyword">output_y</span> = ry − (k / (rx + Δx))</div>
+        <div style="margin-top:var(--space-1)"><span class="code-keyword">output_y</span> = (ry × Δx) / (rx + Δx)</div>
+        <div style="margin-top:var(--space-3); color:#6C7086">// Bigger input → bigger output, but with diminishing returns</div>
+      </div>
+    </div>
+
+    <!-- Screen 3: The spot price intuition -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Price emerges from the ratio</h2>
+
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary); margin-bottom:var(--space-6)">The <span class="term" data-definition="Spot price is the current instantaneous exchange rate the AMM offers for an infinitely small trade. It equals reserve_y / reserve_x for a buy of X">spot price</span> of token X in terms of Y is just reserve_y / reserve_x. When the pool has 1,000 X and 2,000 Y, one X costs about 2 Y. No oracle needed — the ratio is the price.</p>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:var(--space-4); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); text-align:center; box-shadow:var(--shadow-sm)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-2)">Before Trade</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-1)">X=1000, Y=2000</div>
+          <div style="color:var(--color-accent); font-weight:600">Price = 2.00 Y/X</div>
+        </div>
+        <div style="background:var(--color-accent-light); border-radius:var(--radius-md); padding:var(--space-5); text-align:center; box-shadow:var(--shadow-sm); border:2px solid var(--color-accent)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-accent); margin-bottom:var(--space-2)">Someone Buys 100 X</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-1)">Pays ≈ 182 Y</div>
+          <div style="font-size:var(--text-sm); color:var(--color-text-secondary)"><span class="term" data-definition="Price impact is how much your trade moves the spot price. Larger trades relative to pool size cause bigger price impact, making each marginal unit more expensive">Price impact</span>: paid 1.82/X avg</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); text-align:center; box-shadow:var(--shadow-sm)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-2)">After Trade</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-1)">X=900, Y=2182</div>
+          <div style="color:var(--color-accent); font-weight:600">Price = 2.42 Y/X</div>
+        </div>
+      </div>
+
+      <p class="animate-in" style="color:var(--color-text-secondary)">That price increase is not a bug — it's a feature. Large buyers pay more, which deters excessive single trades and ensures the AMM always has tokens to sell. The curve is <span class="term" data-definition="Concave means diminishing returns: each additional unit of input buys you slightly less output than the last. The output function curves inward. This is required for AMMs to function correctly">concave</span> by design.</p>
+    </div>
+
+    <!-- Screen 4: The challenge framing + quiz -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Your job: build a better AMM</h2>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); margin-bottom:var(--space-8)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); border-left:4px solid #D4A843; box-shadow:var(--shadow-sm)">
+          <h3 style="font-family:var(--font-display); font-weight:700; font-size:var(--text-lg); margin-bottom:var(--space-3); color:#D4A843">Your AMM</h3>
+          <ul style="list-style:none; display:flex; flex-direction:column; gap:var(--space-2)">
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> You design the pricing formula in Rust</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> You can set any fee you want</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> You can store state across trades</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> Goal: maximize "edge" — net profit</li>
+          </ul>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); border-left:4px solid #2A7B9B; box-shadow:var(--shadow-sm)">
+          <h3 style="font-family:var(--font-display); font-weight:700; font-size:var(--text-lg); margin-bottom:var(--space-3); color:#2A7B9B">The Normalizer</h3>
+          <ul style="list-style:none; display:flex; flex-direction:column; gap:var(--space-2)">
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> A fixed constant-product AMM</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> <span class="term" data-definition="Basis points (bps) are 1/100th of a percent. 100 bps = 1%. AMM fees are often quoted in bps: a 50 bps fee means the AMM keeps 0.5% of each trade">30–80 bps</span> fee, random reserves</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> Your benchmark opponent</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> You must beat it across 1,000 markets</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="quiz-container animate-in" id="quiz-module1">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Correct! The AMM uses a formula — both buyers and sellers trade against the pooled reserves, not against each other."
+             data-explanation-wrong="In an AMM, you trade against a pool of tokens using a mathematical formula. There is no matching with another human trader.">
+          <h3 class="quiz-question">When you buy token X from an AMM, who is on the other side of your trade?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Another trader who wants to sell X</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The liquidity pool itself, governed by a math formula</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The exchange operator who sets prices manually</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Yes — x * y = k means buying X reduces reserve_x and increases reserve_y, so the price of X (ry/rx) rises."
+             data-explanation-wrong="Think about what happens to reserve_x and reserve_y when someone buys X from the pool. The ratio ry/rx determines the price.">
+          <h3 class="quiz-question">After a large buy of token X, what happens to the spot price of X?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It goes down — more X was bought so it must be cheaper now</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It stays the same — the formula keeps prices constant</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It goes up — reserve_x fell, so ry/rx increased</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+      </div>
+    </div>
+
+    <!-- Screen 5: Translation block -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The starter code, decoded</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-4)">This is the actual Rust you start with. It implements a basic constant-product AMM with a 5% fee. Let's read it line by line.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">pub fn</span> <span class="code-function">compute_swap</span>(data: &[u8]) -> <span class="code-property">u64</span> {</span>
+<span class="code-line">  <span class="code-keyword">let</span> decoded = wincode::<span class="code-function">deserialize</span>(data);</span>
+<span class="code-line">  <span class="code-keyword">let</span> input = decoded.input_amount <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  <span class="code-keyword">let</span> rx    = decoded.reserve_x    <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  <span class="code-keyword">let</span> ry    = decoded.reserve_y    <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  <span class="code-keyword">let</span> fee_input = input * <span class="code-number">9500</span> / <span class="code-number">10000</span>;</span>
+<span class="code-line">  ((ry * fee_input) / (rx + fee_input)) <span class="code-keyword">as</span> u64</span>
+<span class="code-line">}</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">The function receives the full market state as raw bytes and returns how many tokens to give out.</p>
+            <p class="tl">Decode the bytes into a struct with input_amount, reserve_x, reserve_y fields.</p>
+            <p class="tl">Unpack the input amount and both reserves into 128-bit integers to avoid overflow.</p>
+            <p class="tl">Charge a 5% fee: multiply input by 9500/10000, so only 95% of the input counts toward the swap.</p>
+            <p class="tl">Apply the x*y=k formula using the fee-adjusted input. Return as a 64-bit integer.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-accent-light); border-radius:var(--radius-md); padding:var(--space-5); border-left:4px solid var(--color-accent); margin-top:var(--space-4)">
+        <strong style="font-family:var(--font-display)">Your challenge:</strong> replace this formula with something smarter. The fee, the shape of the curve, even the state you track — all of it is under your control. The next modules explain what "smarter" means.
+      </div>
+    </div>
+
+  </div>
+</section>

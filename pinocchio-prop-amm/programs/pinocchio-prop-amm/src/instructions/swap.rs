@@ -1,4 +1,4 @@
-//! Swap instruction handler for Pinocchio Prop AMM
+cargo test//! Swap instruction handler for Pinocchio Prop AMM
 
 use pinocchio::prelude::*;
 use crate::state::Pool;

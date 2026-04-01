@@ -1,0 +1,253 @@
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Edge: The Profit Formula</h1>
+      <p class="module-subtitle">Every trade makes you money or costs you money. Here is the exact math that determines which.</p>
+    </header>
+
+    <!-- Screen 1: What is edge? -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Edge = what you earn at fair value</h2>
+
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary); margin-bottom:var(--space-6)"><span class="term" data-definition="Edge is the profit an AMM makes measured in fair-value terms. For every trade, you compute what you gave away and what you received, both priced at the current fair market price. Positive edge means you profited.">Edge</span> is not the same as cash profit. It is the profit you made if every token were immediately valued at its current fair price. This matters because the simulation resets at fair value each step — you cannot let tokens accumulate at stale prices.</p>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); border-left:5px solid #2D8B55">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-4)">
+            <div style="width:44px; height:44px; background:#2D8B55; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.3rem; flex-shrink:0">+</div>
+            <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; color:#2D8B55">Retail Trade Edge</h3>
+          </div>
+          <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#A6E3A1; margin-bottom:var(--space-4)">
+            <div><span class="code-comment">// AMM sells X to trader</span></div>
+            <div>edge = amount_y_in</div>
+            <div>     - amount_x_out × fair_price</div>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">You received Y. You gave away X. Your spread is the gap between the Y you got and what that X was worth at fair price. This is positive when your fee &gt; 0.</p>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); border-left:5px solid #D94F30">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-4)">
+            <div style="width:44px; height:44px; background:#D94F30; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.3rem; flex-shrink:0">−</div>
+            <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; color:#D94F30">Arb Trade Edge</h3>
+          </div>
+          <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#F38BA8; margin-bottom:var(--space-4)">
+            <div><span class="code-comment">// AMM buys X at stale price</span></div>
+            <div>edge = amount_x_in × fair_price</div>
+            <div>     - amount_y_out</div>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The arb paid you too little Y for too much X. You overpaid for X relative to its fair price. This is always negative — <span class="term" data-definition="Adverse selection is the loss AMMs suffer from informed traders (arbitrageurs) who only trade when the AMM price is worse than fair value. The AMM always loses to arbs because arbs have better price information.">adverse selection</span> is unavoidable.</p>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-accent-light); border:2px solid var(--color-accent); border-radius:var(--radius-md); padding:var(--space-6); text-align:center">
+        <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700; margin-bottom:var(--space-2)">Net Edge = Retail Spread − Arb Losses</div>
+        <p style="color:var(--color-text-secondary); font-size:var(--text-sm)">Win the challenge by making this number bigger than the normalizer&apos;s. You can do it by earning more retail spread, losing less to arbs, or both.</p>
+      </div>
+    </div>
+
+    <!-- Screen 2: The code from engine.rs decoded -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The exact edge calculation from the source</h2>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-comment">// From engine.rs</span></span>
+<span class="code-line"><span class="code-keyword">let</span> trade_edge = <span class="code-keyword">if</span> trade.amm_buys_x {</span>
+<span class="code-line">  trade.amount_x * fair_price</span>
+<span class="code-line">    - trade.amount_y</span>
+<span class="code-line">} <span class="code-keyword">else</span> {</span>
+<span class="code-line">  trade.amount_y</span>
+<span class="code-line">    - trade.amount_x * fair_price</span>
+<span class="code-line">};</span>
+<span class="code-line">submission_edge += trade_edge;</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">For every single trade that touches your AMM, this formula runs.</p>
+            <p class="tl">If your AMM is buying X (trader sells X to you): value received = amount_x × fair_price. Subtract amount_y you paid. This is the arb scenario — usually negative.</p>
+            <p class="tl">If your AMM is selling X (trader buys X from you): value received = amount_y. Subtract amount_x × fair_price — what that X was actually worth. This is the retail scenario — usually positive.</p>
+            <p class="tl">Accumulate edge across all 10,000 steps. This single running total is your final score.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); margin-top:var(--space-6)">
+        <h3 style="font-family:var(--font-display); font-weight:700; font-size:var(--text-lg); margin-bottom:var(--space-4)">Worked example</h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4)">
+          <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-4)">
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; color:var(--color-error); margin-bottom:var(--space-2)">Arb trade (bad for you)</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); line-height:1.8">
+              Fair price: 2.00 Y/X<br>
+              Arb sells 50 X, gets 98 Y<br>
+              Edge = (50 × 2.00) − 98<br>
+              Edge = 100 − 98 = <strong style="color:var(--color-error)">+2.0</strong><br>
+              Wait — arb edge is <em>positive for arb</em>.<br>
+              For YOU: <strong style="color:var(--color-error)">−2.0</strong>
+            </div>
+          </div>
+          <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-4)">
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; color:var(--color-success); margin-bottom:var(--space-2)">Retail trade (good for you)</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); line-height:1.8">
+              Fair price: 2.00 Y/X<br>
+              Trader sends 20 Y, gets 9.5 X<br>
+              Edge = 20 − (9.5 × 2.00)<br>
+              Edge = 20 − 19.0 = <strong style="color:var(--color-success)">+1.0</strong><br>
+              You kept 1 Y worth of spread.<br>
+              <strong style="color:var(--color-success)">+1.0</strong> to your score.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: The tension -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The fundamental tension</h2>
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary); margin-bottom:var(--space-6)">There is a brutal tradeoff at the heart of every AMM. Higher fees protect you from arbs — but also drive retail traders to the normalizer instead.</p>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-md); margin-bottom:var(--space-6)">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr">
+          <div style="padding:var(--space-5); border-right:1px solid var(--color-border); text-align:center">
+            <div style="font-family:var(--font-display); font-size:var(--text-3xl); font-weight:800; color:#D94F30; margin-bottom:var(--space-2)">Low fee</div>
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">e.g. 10 bps</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-2)">
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Attracts max retail flow</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ Tiny spread per trade</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ Bleeds badly to arbs</div>
+            </div>
+          </div>
+          <div style="padding:var(--space-5); border-right:1px solid var(--color-border); text-align:center; background:var(--color-accent-light)">
+            <div style="font-family:var(--font-display); font-size:var(--text-3xl); font-weight:800; color:var(--color-accent); margin-bottom:var(--space-2)">Sweet spot</div>
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">depends on market</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-2)">
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Competitive with normalizer</div>
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Enough spread to cover arbs</div>
+              <div style="background:var(--color-accent-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-accent)">↑ Varies by vol, flow, opp fee</div>
+            </div>
+          </div>
+          <div style="padding:var(--space-5); text-align:center">
+            <div style="font-family:var(--font-display); font-size:var(--text-3xl); font-weight:800; color:#2A7B9B; margin-bottom:var(--space-2)">High fee</div>
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">e.g. 300 bps</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-2)">
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Arb losses stay small</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ No retail trades routed to you</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ Zero spread revenue</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="animate-in" style="color:var(--color-text-secondary)">The optimal fee is not fixed — it depends on current <span class="term" data-definition="Volatility in market microstructure determines how frequently the fair price moves past your quoted price. High vol = more arb. The optimal fee scales roughly with the square root of volatility in many theoretical models.">volatility</span>, retail flow intensity, and what the normalizer is charging. Static fees leave money on the table. The best strategies adapt.</p>
+    </div>
+
+    <!-- Screen 4: The chat — arb vs retail explaining their economics -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Adversarial economics: arb explains itself</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-4)">The arbitrageur is not evil — it is doing what rational actors do. Here is the economic logic.</p>
+
+      <div class="chat-window animate-in" id="chat-module4">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="arb" style="display:none">
+            <div class="chat-avatar" style="background:#D94F30">🦈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D94F30">Arbitrageur</span>
+              <p>I am not attacking you personally. I am just a loop in engine.rs that maximizes profit. When your price diverges from fair value, I am extracting that divergence.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>Every time the price moves, you are waiting with the golden-section search to find the exact optimal trade size. How does that work exactly?</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="arb" style="display:none">
+            <div class="chat-avatar" style="background:#D94F30">🦈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D94F30">Arbitrageur</span>
+              <p>I search over all possible trade sizes using golden-section search. My profit function is concave in trade size — it goes up, peaks, then comes back down. I find the peak precisely.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>So a higher fee does not stop you — it just makes my price diverge more before you profit enough to bother. You wait for a bigger gap before trading?</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="arb" style="display:none">
+            <div class="chat-avatar" style="background:#D94F30">🦈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D94F30">Arbitrageur</span>
+              <p>Exactly. Your fee is a threshold I have to clear. Higher fee = smaller arb trade per step, but you also fall further behind fair value before I act. The net effect on your edge is subtle.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="5" data-sender="retail" style="display:none">
+            <div class="chat-avatar" style="background:#2D8B55">🛍️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#2D8B55">Retail Trader</span>
+              <p>For the record, I just want the best price. The router does all the thinking for me. If you charge too much, I get sent to the normalizer and you earn nothing on my order.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="6" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>So my whole strategy is: charge just enough to cover my expected arb loss per step, while staying competitive enough to steal retail flow from the normalizer. Easy in theory.</p>
+            </div>
+          </div>
+        </div>
+        <div class="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module4-typing-avatar" style="background:#D94F30">?</div>
+          <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+        </div>
+        <div class="chat-controls" style="padding:var(--space-4); border-top:1px solid var(--color-border); display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap">
+          <button class="btn chat-next-btn" style="background:var(--color-accent); color:white; border:none; padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Next Message</button>
+          <button class="btn chat-all-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Play All</button>
+          <button class="btn chat-reset-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Replay</button>
+          <span class="chat-progress" style="margin-left:auto; font-size:var(--text-sm); color:var(--color-text-muted); font-family:var(--font-mono)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 5: Quiz -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Check your understanding</h2>
+
+      <div class="quiz-container animate-in" id="quiz-module4">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Correct. Retail edge = amount_y_received − amount_x_given × fair_price. The spread is what you keep above fair value."
+             data-explanation-wrong="Think about what you give and what you receive, both priced at fair value. The retail trader gives you Y and gets X.">
+          <h3 class="quiz-question">A retail trader sends 30 Y and gets 14 X when fair price is 2.0 Y/X. What is your edge on this trade?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>+30 Y (you received the full input)</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>+2 Y (30 received minus 14×2.0 = 28 given at fair value)</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>−2 Y (you lost to the trader)</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Exactly right. You cannot avoid adverse selection — arbs always trade when it is profitable for them, meaning it is unprofitable for you. The best you can do is minimize how much they take."
+             data-explanation-wrong="Adverse selection from arbitrageurs is a structural feature of AMMs — they only trade when your price is wrong. The question is how much they take, not whether they trade.">
+          <h3 class="quiz-question">Can your AMM design fully eliminate adverse selection losses from arbitrageurs?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes — set a high enough fee and arbs will not trade</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes — use storage to track price and close the gap proactively</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No — arbs always profit when price moves; you can reduce but not eliminate losses</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+      </div>
+    </div>
+
+  </div>
+</section>

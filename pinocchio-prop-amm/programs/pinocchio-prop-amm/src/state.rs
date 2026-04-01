@@ -1,8 +1,5 @@
 //! Pool state and LP token logic for Pinocchio Prop AMM
 
-use pinocchio::prelude::*;
-
-#[account]
 pub struct Pool {
     pub lp_supply: u64,
     pub base_reserve: u64,

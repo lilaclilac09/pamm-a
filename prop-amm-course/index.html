@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prop AMM Challenge — How It Works</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    :root {
+      --color-accent:       #D4A843;
+      --color-accent-hover: #BF9530;
+      --color-accent-light: #FDF5E0;
+      --color-accent-muted: #E0C070;
+    }
+  </style>
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+    <div class="nav-inner">
+      <span class="nav-title">Prop AMM Challenge</span>
+      <div class="nav-dots" id="nav-dots" role="tablist">
+        <button class="nav-dot" data-target="module-1" data-tooltip="What is an AMM?" role="tab" aria-label="Module 1: What is an AMM?"></button>
+        <button class="nav-dot" data-target="module-2" data-tooltip="The Simulation Arena" role="tab" aria-label="Module 2: The Simulation Arena"></button>
+        <button class="nav-dot" data-target="module-3" data-tooltip="Your Weapon: compute_swap" role="tab" aria-label="Module 3: Your Weapon: compute_swap"></button>
+        <button class="nav-dot" data-target="module-4" data-tooltip="Edge: The Profit Formula" role="tab" aria-label="Module 4: Edge: The Profit Formula"></button>
+        <button class="nav-dot" data-target="module-5" data-tooltip="Strategy Space" role="tab" aria-label="Module 5: Strategy Space"></button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+<section class="module" id="module-1" style="background: var(--color-bg)">
+  <div class="module-content">
+
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">What is an AMM?</h1>
+      <p class="module-subtitle">You're about to build a market-making robot. Let's understand what that actually means.</p>
+    </header>
+
+    <!-- Screen 1: The core idea -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Markets need someone to make prices</h2>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); box-shadow:var(--shadow-sm); border-top:3px solid #2A7B9B">
+          <div style="font-size:2.5rem; margin-bottom:var(--space-3)">🏦</div>
+          <h3 style="font-family:var(--font-display); font-size:var(--text-lg); font-weight:700; margin-bottom:var(--space-2)">Traditional Exchange</h3>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">Buyers and sellers post limit orders. A centralized <span class="term" data-definition="An order book lists all outstanding buy and sell offers at specific prices, managed by a central exchange">order book</span> matches them when prices cross. Requires active human market makers.</p>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); box-shadow:var(--shadow-sm); border-top:3px solid #D4A843">
+          <div style="font-size:2.5rem; margin-bottom:var(--space-3)">🤖</div>
+          <h3 style="font-family:var(--font-display); font-size:var(--text-lg); font-weight:700; margin-bottom:var(--space-2)">Automated Market Maker</h3>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">A <span class="term" data-definition="An Automated Market Maker is a smart contract or program that always quotes a buy and sell price using a mathematical formula, replacing the need for a human counterparty">AMM</span> uses a mathematical formula to quote prices 24/7. No humans needed — just math and <span class="term" data-definition="Liquidity refers to the pool of tokens locked into the AMM that it uses to fill trades. More liquidity = smaller price impact per trade">liquidity</span>.</p>
+        </div>
+      </div>
+
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary)">When you trade on Uniswap or any <span class="term" data-definition="Decentralized Finance — financial applications built on blockchains that operate without centralized intermediaries like banks or brokerages">DeFi</span> exchange, you're not matched with another human. You're trading directly against a pool of tokens managed by an AMM formula.</p>
+    </div>
+
+    <!-- Screen 2: Reserves and the formula -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The AMM has two buckets of tokens</h2>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-8); box-shadow:var(--shadow-md); margin-bottom:var(--space-6)">
+        <div style="display:flex; align-items:center; justify-content:center; gap:var(--space-12); flex-wrap:wrap">
+          <div style="text-align:center">
+            <div style="width:120px; height:120px; background:linear-gradient(135deg, #FDF5E0, #D4A843); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto var(--space-3); font-size:2.5rem; box-shadow:var(--shadow-md)">🪙</div>
+            <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700">Reserve X</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-1)">e.g. 1,000 tokens</div>
+          </div>
+          <div style="font-family:var(--font-display); font-size:var(--text-4xl); font-weight:800; color:var(--color-accent)">×</div>
+          <div style="text-align:center">
+            <div style="width:120px; height:120px; background:linear-gradient(135deg, #E4F2F7, #2A7B9B); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto var(--space-3); font-size:2.5rem; box-shadow:var(--shadow-md)">💵</div>
+            <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700">Reserve Y</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-1)">e.g. 2,000 USDC</div>
+          </div>
+          <div style="font-family:var(--font-display); font-size:var(--text-4xl); font-weight:800; color:var(--color-accent)">=</div>
+          <div style="text-align:center">
+            <div style="width:120px; height:120px; background:linear-gradient(135deg, #FAF7F2, #9E9790); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto var(--space-3); font-size:2rem; font-family:var(--font-mono); font-weight:700; box-shadow:var(--shadow-md)">k</div>
+            <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700">Constant</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-1)">2,000,000</div>
+          </div>
+        </div>
+        <p style="text-align:center; margin-top:var(--space-6); font-size:var(--text-sm); color:var(--color-text-secondary)">The classic <span class="term" data-definition="Constant-product formula: the product of the two reserves (x * y = k) must always stay the same after any trade. Buying X decreases reserve_x and increases reserve_y, keeping k constant">constant-product AMM</span> demands that reserve_x × reserve_y always equals the same number k. This single rule determines every price the AMM quotes.</p>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-bg-code); border-radius:var(--radius-md); padding:var(--space-6); font-family:var(--font-mono); font-size:var(--text-sm); line-height:1.8; box-shadow:var(--shadow-md)">
+        <div style="color:#6C7086; margin-bottom:var(--space-2)">// How many Y tokens do you get for Δx tokens of X?</div>
+        <div><span class="code-comment">// Before:</span> <span class="code-property">rx</span> × <span class="code-property">ry</span> = k</div>
+        <div><span class="code-comment">// After:</span> &nbsp;(rx + Δx) × <span class="code-property">ry_new</span> = k</div>
+        <div style="margin-top:var(--space-3)"><span class="code-keyword">output_y</span> = ry − (k / (rx + Δx))</div>
+        <div style="margin-top:var(--space-1)"><span class="code-keyword">output_y</span> = (ry × Δx) / (rx + Δx)</div>
+        <div style="margin-top:var(--space-3); color:#6C7086">// Bigger input → bigger output, but with diminishing returns</div>
+      </div>
+    </div>
+
+    <!-- Screen 3: The spot price intuition -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Price emerges from the ratio</h2>
+
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary); margin-bottom:var(--space-6)">The <span class="term" data-definition="Spot price is the current instantaneous exchange rate the AMM offers for an infinitely small trade. It equals reserve_y / reserve_x for a buy of X">spot price</span> of token X in terms of Y is just reserve_y / reserve_x. When the pool has 1,000 X and 2,000 Y, one X costs about 2 Y. No oracle needed — the ratio is the price.</p>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:var(--space-4); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); text-align:center; box-shadow:var(--shadow-sm)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-2)">Before Trade</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-1)">X=1000, Y=2000</div>
+          <div style="color:var(--color-accent); font-weight:600">Price = 2.00 Y/X</div>
+        </div>
+        <div style="background:var(--color-accent-light); border-radius:var(--radius-md); padding:var(--space-5); text-align:center; box-shadow:var(--shadow-sm); border:2px solid var(--color-accent)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-accent); margin-bottom:var(--space-2)">Someone Buys 100 X</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-1)">Pays ≈ 182 Y</div>
+          <div style="font-size:var(--text-sm); color:var(--color-text-secondary)"><span class="term" data-definition="Price impact is how much your trade moves the spot price. Larger trades relative to pool size cause bigger price impact, making each marginal unit more expensive">Price impact</span>: paid 1.82/X avg</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); text-align:center; box-shadow:var(--shadow-sm)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-2)">After Trade</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-1)">X=900, Y=2182</div>
+          <div style="color:var(--color-accent); font-weight:600">Price = 2.42 Y/X</div>
+        </div>
+      </div>
+
+      <p class="animate-in" style="color:var(--color-text-secondary)">That price increase is not a bug — it's a feature. Large buyers pay more, which deters excessive single trades and ensures the AMM always has tokens to sell. The curve is <span class="term" data-definition="Concave means diminishing returns: each additional unit of input buys you slightly less output than the last. The output function curves inward. This is required for AMMs to function correctly">concave</span> by design.</p>
+    </div>
+
+    <!-- Screen 4: The challenge framing + quiz -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Your job: build a better AMM</h2>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); margin-bottom:var(--space-8)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); border-left:4px solid #D4A843; box-shadow:var(--shadow-sm)">
+          <h3 style="font-family:var(--font-display); font-weight:700; font-size:var(--text-lg); margin-bottom:var(--space-3); color:#D4A843">Your AMM</h3>
+          <ul style="list-style:none; display:flex; flex-direction:column; gap:var(--space-2)">
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> You design the pricing formula in Rust</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> You can set any fee you want</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> You can store state across trades</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#D4A843">→</span> Goal: maximize "edge" — net profit</li>
+          </ul>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-6); border-left:4px solid #2A7B9B; box-shadow:var(--shadow-sm)">
+          <h3 style="font-family:var(--font-display); font-weight:700; font-size:var(--text-lg); margin-bottom:var(--space-3); color:#2A7B9B">The Normalizer</h3>
+          <ul style="list-style:none; display:flex; flex-direction:column; gap:var(--space-2)">
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> A fixed constant-product AMM</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> <span class="term" data-definition="Basis points (bps) are 1/100th of a percent. 100 bps = 1%. AMM fees are often quoted in bps: a 50 bps fee means the AMM keeps 0.5% of each trade">30–80 bps</span> fee, random reserves</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> Your benchmark opponent</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:#2A7B9B">→</span> You must beat it across 1,000 markets</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="quiz-container animate-in" id="quiz-module1">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Correct! The AMM uses a formula — both buyers and sellers trade against the pooled reserves, not against each other."
+             data-explanation-wrong="In an AMM, you trade against a pool of tokens using a mathematical formula. There is no matching with another human trader.">
+          <h3 class="quiz-question">When you buy token X from an AMM, who is on the other side of your trade?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Another trader who wants to sell X</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The liquidity pool itself, governed by a math formula</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The exchange operator who sets prices manually</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Yes — x * y = k means buying X reduces reserve_x and increases reserve_y, so the price of X (ry/rx) rises."
+             data-explanation-wrong="Think about what happens to reserve_x and reserve_y when someone buys X from the pool. The ratio ry/rx determines the price.">
+          <h3 class="quiz-question">After a large buy of token X, what happens to the spot price of X?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It goes down — more X was bought so it must be cheaper now</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It stays the same — the formula keeps prices constant</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It goes up — reserve_x fell, so ry/rx increased</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+      </div>
+    </div>
+
+    <!-- Screen 5: Translation block -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The starter code, decoded</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-4)">This is the actual Rust you start with. It implements a basic constant-product AMM with a 5% fee. Let's read it line by line.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">pub fn</span> <span class="code-function">compute_swap</span>(data: &[u8]) -> <span class="code-property">u64</span> {</span>
+<span class="code-line">  <span class="code-keyword">let</span> decoded = wincode::<span class="code-function">deserialize</span>(data);</span>
+<span class="code-line">  <span class="code-keyword">let</span> input = decoded.input_amount <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  <span class="code-keyword">let</span> rx    = decoded.reserve_x    <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  <span class="code-keyword">let</span> ry    = decoded.reserve_y    <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  <span class="code-keyword">let</span> fee_input = input * <span class="code-number">9500</span> / <span class="code-number">10000</span>;</span>
+<span class="code-line">  ((ry * fee_input) / (rx + fee_input)) <span class="code-keyword">as</span> u64</span>
+<span class="code-line">}</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">The function receives the full market state as raw bytes and returns how many tokens to give out.</p>
+            <p class="tl">Decode the bytes into a struct with input_amount, reserve_x, reserve_y fields.</p>
+            <p class="tl">Unpack the input amount and both reserves into 128-bit integers to avoid overflow.</p>
+            <p class="tl">Charge a 5% fee: multiply input by 9500/10000, so only 95% of the input counts toward the swap.</p>
+            <p class="tl">Apply the x*y=k formula using the fee-adjusted input. Return as a 64-bit integer.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-accent-light); border-radius:var(--radius-md); padding:var(--space-5); border-left:4px solid var(--color-accent); margin-top:var(--space-4)">
+        <strong style="font-family:var(--font-display)">Your challenge:</strong> replace this formula with something smarter. The fee, the shape of the curve, even the state you track — all of it is under your control. The next modules explain what "smarter" means.
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">The Simulation Arena</h1>
+      <p class="module-subtitle">10,000 steps. Prices drift. Predators attack. Customers arrive. Here is every frame of that battle.</p>
+    </header>
+
+    <!-- Screen 1: The four actors -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Meet the four players</h2>
+
+      <div class="animate-in stagger-children" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); margin-bottom:var(--space-6)">
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); border-top:4px solid #7B6DAA; box-shadow:var(--shadow-sm)">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+            <div style="width:40px; height:40px; background:#7B6DAA; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.2rem; flex-shrink:0">📈</div>
+            <strong style="font-family:var(--font-display); color:#7B6DAA">Price Process</strong>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The "<span class="term" data-definition="Geometric Brownian Motion (GBM) is a mathematical model for random price movement. At each step, the price multiplies by a random factor drawn from a log-normal distribution. It is used to model stock and crypto prices.">GBM</span>" random walk. Each step, the fair price of token X drifts up or down by a random amount. This is the ground truth that other actors react to.</p>
+        </div>
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); border-top:4px solid #D94F30; box-shadow:var(--shadow-sm)">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+            <div style="width:40px; height:40px; background:#D94F30; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.2rem; flex-shrink:0">🦈</div>
+            <strong style="font-family:var(--font-display); color:#D94F30">Arbitrageur</strong>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The predator. After every price move, the <span class="term" data-definition="Arbitrageurs exploit price differences between markets. When the AMM price diverges from the fair price, they trade to profit, resetting the AMM price — but at your expense">arbitrageur</span> computes the optimal trade to extract maximum profit from any gap between your AMM price and the new fair price.</p>
+        </div>
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); border-top:4px solid #2D8B55; box-shadow:var(--shadow-sm)">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+            <div style="width:40px; height:40px; background:#2D8B55; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.2rem; flex-shrink:0">🛍️</div>
+            <strong style="font-family:var(--font-display); color:#2D8B55">Retail Trader</strong>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The customer. Arrives each step with a random order (buy or sell). The <span class="term" data-definition="The router compares prices from both AMMs and splits the order to maximize output for the trader. You earn retail flow by offering better prices than the normalizer.">router</span> compares your AMM against the normalizer and sends the order wherever the trader gets a better deal.</p>
+        </div>
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); border-top:4px solid #D4A843; box-shadow:var(--shadow-sm)">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+            <div style="width:40px; height:40px; background:#D4A843; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.2rem; flex-shrink:0">⚙️</div>
+            <strong style="font-family:var(--font-display); color:#D4A843">Your AMM</strong>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">Your formula. You receive every trade and decide how many tokens to give out. Your goal is to earn more from retail spread than you lose to arb — across every step of every market.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 2: The step anatomy — flow animation -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">What happens in one step</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">Each of the 10,000 simulation steps follows the same sequence. Step through it below.</p>
+
+      <div class="flow-animation animate-in" data-steps='[
+        {"highlight":"flow-price","label":"Step 1 — Price moves: The GBM process generates a new fair price. Volatility (sigma) is randomly chosen per market: anywhere from 0.01% to 0.70% per step."},
+        {"highlight":"flow-arb","label":"Step 2 — Arb hits your AMM: The arbitrageur uses golden-section search to find the exact trade size that maximizes their profit from the gap between your stale price and the new fair price.","packet":true,"from":"price","to":"arb"},
+        {"highlight":"flow-youramm","label":"Step 3 — Your AMM absorbs the arb: The arb trade executes against your reserves. Your price resets to near fair value — but you lost tokens to the arbitrageur.","packet":true,"from":"arb","to":"youramm"},
+        {"highlight":"flow-norm","label":"Step 3b — Normalizer also gets arbed: The same arbitrageur hits the normalizer AMM too. Both AMMs reset to fair value.","packet":true,"from":"arb","to":"norm"},
+        {"highlight":"flow-retail","label":"Step 4 — Retail arrives: A random retail order appears. The router checks both AMMs to find the best price.","packet":true,"from":"retail","to":"router"},
+        {"highlight":"flow-router","label":"Step 5 — Router decides: The router computes the optimal split between your AMM and the normalizer to maximize output for the retail trader."},
+        {"highlight":"flow-youramm","label":"Step 6 — Trade executes: The retail order fills against whichever AMM(s) offer better prices. You earn spread from trades routed to you.","packet":true,"from":"router","to":"youramm"}
+      ]'>
+        <div class="flow-actors" style="display:flex; flex-wrap:wrap; gap:var(--space-4); justify-content:center; margin-bottom:var(--space-6)">
+          <div class="flow-actor" id="flow-price" style="border-color:#7B6DAA">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#EEE9F7,#7B6DAA)">📈</div>
+            <span>Price Process</span>
+          </div>
+          <div class="flow-actor" id="flow-arb" style="border-color:#D94F30">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#FDEEE9,#D94F30)">🦈</div>
+            <span>Arbitrageur</span>
+          </div>
+          <div class="flow-actor" id="flow-retail" style="border-color:#2D8B55">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#E8F5EE,#2D8B55)">🛍️</div>
+            <span>Retail Trader</span>
+          </div>
+          <div class="flow-actor" id="flow-router" style="border-color:#2A7B9B">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#E4F2F7,#2A7B9B)">🔀</div>
+            <span>Router</span>
+          </div>
+          <div class="flow-actor" id="flow-youramm" style="border-color:#D4A843">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#FDF5E0,#D4A843)">⚙️</div>
+            <span>Your AMM</span>
+          </div>
+          <div class="flow-actor" id="flow-norm" style="border-color:#2A7B9B">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#E4F2F7,#2A7B9B)">📊</div>
+            <span>Normalizer</span>
+          </div>
+        </div>
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label" id="flow-label" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); margin-bottom:var(--space-4); font-size:var(--text-sm); color:var(--color-text-secondary); min-height:3.5rem; box-shadow:var(--shadow-sm)">Click "Next Step" to begin</div>
+        <div class="flow-controls">
+          <button class="btn flow-next-btn" style="background:var(--color-accent); color:white; border:none; padding:var(--space-2) var(--space-5); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Next Step</button>
+          <button class="btn flow-reset-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-5); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer; margin-left:var(--space-3)">Restart</button>
+          <span class="flow-progress" style="margin-left:var(--space-4); font-size:var(--text-sm); color:var(--color-text-muted); font-family:var(--font-mono)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: Market parameters -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Each of 1,000 markets is different</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">The simulation runs 1,000 independent markets. Every market draws its parameters fresh from uniform distributions. Your AMM must survive all of them — calm markets, wild markets, and everything between.</p>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); box-shadow:var(--shadow-sm)">
+          <div style="font-family:var(--font-mono); font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">VOLATILITY</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700; margin-bottom:var(--space-1)">0.01% — 0.70%</div>
+          <div style="font-size:var(--text-sm); color:var(--color-text-secondary)"><span class="term" data-definition="Sigma (σ) is the standard deviation of price returns per step. Low sigma means calm prices; high sigma means wild swings. Higher volatility = more arb losses for your AMM">Sigma per step</span>. At max vol, price can move ±2% in a single step.</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); box-shadow:var(--shadow-sm)">
+          <div style="font-family:var(--font-mono); font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">RETAIL FLOW</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700; margin-bottom:var(--space-1)">λ 0.4 — 1.2/step</div>
+          <div style="font-size:var(--text-sm); color:var(--color-text-secondary)"><span class="term" data-definition="Lambda (λ) is the expected number of retail orders per step, drawn from a Poisson distribution. Higher lambda = more customer orders = more revenue opportunity">Lambda</span> controls retail arrival rate. Order sizes: 12–28 Y units each.</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); box-shadow:var(--shadow-sm)">
+          <div style="font-family:var(--font-mono); font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">NORMALIZER FEE</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700; margin-bottom:var(--space-1)">30 — 80 bps</div>
+          <div style="font-size:var(--text-sm); color:var(--color-text-secondary)">Your opponent's fee varies per market. Sometimes you face a tight-spread normalizer; sometimes a greedy one.</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); box-shadow:var(--shadow-sm)">
+          <div style="font-family:var(--font-mono); font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">NORMALIZER LIQUIDITY</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700; margin-bottom:var(--space-1)">0.4× — 2.0×</div>
+          <div style="font-size:var(--text-sm); color:var(--color-text-secondary)">Base reserves scaled randomly. A 2× normalizer has shallower price impact per unit, making it harder to outcompete on large orders.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 4: The group chat -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">A day in the life of one step</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-4)">Imagine the four actors could talk to each other. Here is step 4,217 of a high-volatility market.</p>
+
+      <div class="chat-window animate-in" id="chat-module2">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="price" style="display:none">
+            <div class="chat-avatar" style="background:#7B6DAA">📈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#7B6DAA">Price Process</span>
+              <p>New fair value: X dropped 0.4% this step. GBM rolled a negative shock. Current fair price: 1.962 Y per X.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="arb" style="display:none">
+            <div class="chat-avatar" style="background:#D94F30">🦈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D94F30">Arbitrageur</span>
+              <p>Both AMMs are stale at 2.00 Y/X. I ran golden-section search. Optimal trade: sell 43 X into each AMM to push prices down to fair value.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>Arb trade executed. I gave out 84.2 Y for 43 X. At fair value that 43 X is only worth 84.4 Y. Lost 0.2 Y to adverse selection this step.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="retail" style="display:none">
+            <div class="chat-avatar" style="background:#2D8B55">🛍️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#2D8B55">Retail Trader</span>
+              <p>I want to buy X. Sending 20 Y. Router, find me the best deal across both AMMs.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="router" style="display:none">
+            <div class="chat-avatar" style="background:#2A7B9B">🔀</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#2A7B9B">Router</span>
+              <p>Checked both AMMs. Your AMM offers a slightly better rate for the first 12 Y. I am splitting: 12 Y goes to Your AMM, 8 Y goes to Normalizer.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="5" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>Retail trade done. Gave out 6.07 X for 12 Y. At fair price 6.07 X is worth 11.9 Y — I kept the 0.1 Y spread as profit. Net this step: −0.2 + 0.1 = −0.1 Y edge.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="6" data-sender="price" style="display:none">
+            <div class="chat-avatar" style="background:#7B6DAA">📈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#7B6DAA">Price Process</span>
+              <p>Next step loading. Rolling new GBM shock... A tight-vol market, so only ±0.08% expected. See you in step 4,218.</p>
+            </div>
+          </div>
+        </div>
+        <div class="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module2-typing-avatar" style="background:#7B6DAA">?</div>
+          <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+        </div>
+        <div class="chat-controls" style="padding:var(--space-4); border-top:1px solid var(--color-border); display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap">
+          <button class="btn chat-next-btn" style="background:var(--color-accent); color:white; border:none; padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Next Message</button>
+          <button class="btn chat-all-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Play All</button>
+          <button class="btn chat-reset-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Replay</button>
+          <span class="chat-progress" style="margin-left:auto; font-size:var(--text-sm); color:var(--color-text-muted); font-family:var(--font-mono)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 5: Engine code translation + quiz -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The engine loop, decoded</h2>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">for</span> step <span class="code-keyword">in</span> <span class="code-number">0</span>..config.n_steps {</span>
+<span class="code-line">  <span class="code-keyword">let</span> fair = price.<span class="code-function">step</span>();</span>
+<span class="code-line">  arb.<span class="code-function">execute_arb</span>(&<span class="code-keyword">mut</span> amm_sub, fair);</span>
+<span class="code-line">  arb.<span class="code-function">execute_arb</span>(&<span class="code-keyword">mut</span> amm_norm, fair);</span>
+<span class="code-line">  <span class="code-keyword">let</span> orders = retail.<span class="code-function">generate_orders</span>();</span>
+<span class="code-line">  <span class="code-keyword">for</span> order <span class="code-keyword">in</span> &orders {</span>
+<span class="code-line">    router.<span class="code-function">route_order</span>(</span>
+<span class="code-line">      order, &<span class="code-keyword">mut</span> amm_sub,</span>
+<span class="code-line">      &<span class="code-keyword">mut</span> amm_norm, fair);</span>
+<span class="code-line">  }</span>
+<span class="code-line">}</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Run this sequence 10,000 times (n_steps).</p>
+            <p class="tl">Advance the GBM clock: generate a new fair price for this step.</p>
+            <p class="tl">The arbitrageur attacks YOUR submission AMM first, extracting any profit from the price gap.</p>
+            <p class="tl">The same arbitrageur also attacks the normalizer, resetting it too.</p>
+            <p class="tl">A random number of retail orders appear for this step (could be 0, 1, 2, or more).</p>
+            <p class="tl">For each order, the router decides how to split it optimally between the two AMMs.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="quiz-container animate-in" id="quiz-module2">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Correct. The router maximizes output for the trader, not profit for any AMM. Offering tighter spreads earns you more retail flow."
+             data-explanation-wrong="The router is acting in the trader&apos;s interest, not yours. It finds the split that gives the trader the most tokens out.">
+          <h3 class="quiz-question">When the router splits a retail order between your AMM and the normalizer, whose interests is it optimizing for?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Your AMM — it routes to wherever you earn the most edge</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The retail trader — it maximizes total tokens the trader receives</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The normalizer — it is the benchmark so gets priority</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Right. Higher volatility means prices move more between steps, creating bigger arb opportunities. More arb = bigger losses per step."
+             data-explanation-wrong="Think about what happens when price moves a lot in one step. The arb gap between your stale price and the new fair price is larger.">
+          <h3 class="quiz-question">In a high-volatility market (sigma = 0.70%), what changes compared to a calm market (sigma = 0.01%)?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>More retail orders arrive each step</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The router splits orders differently</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Larger arb trades hit your AMM each step, increasing losses</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-3" style="background: var(--color-bg)">
+  <div class="module-content">
+
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">Your Weapon: compute_swap</h1>
+      <p class="module-subtitle">One function. Six inputs. One output. This is where you win or lose the challenge.</p>
+    </header>
+
+    <!-- Screen 1: The interface -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">What your function receives and returns</h2>
+
+      <div class="animate-in" style="background:var(--color-bg-code); border-radius:var(--radius-lg); padding:var(--space-8); box-shadow:var(--shadow-lg); margin-bottom:var(--space-6); font-family:var(--font-mono); font-size:var(--text-sm); line-height:2">
+        <div style="color:#6C7086; margin-bottom:var(--space-4)">// The full contract you must implement</div>
+        <div><span class="code-keyword">pub fn</span> <span class="code-function">compute_swap</span>(data: &[u8]) -> <span class="code-property">u64</span> {</div>
+        <div style="padding-left:var(--space-6); border-left:3px solid #7B6DAA; margin:var(--space-2) 0 var(--space-2) var(--space-3)">
+          <div><span class="code-comment">// Deserialize to get these fields:</span></div>
+          <div><span class="code-property">side</span>: <span class="code-keyword">u8</span>,         <span class="code-comment">// 0 = buy X, 1 = sell X</span></div>
+          <div><span class="code-property">input_amount</span>: <span class="code-keyword">u64</span>,  <span class="code-comment">// tokens trader sends in</span></div>
+          <div><span class="code-property">reserve_x</span>: <span class="code-keyword">u64</span>,     <span class="code-comment">// AMM pool of token X</span></div>
+          <div><span class="code-property">reserve_y</span>: <span class="code-keyword">u64</span>,     <span class="code-comment">// AMM pool of token Y (the numeraire)</span></div>
+          <div><span class="code-property">storage</span>: [<span class="code-keyword">u64</span>; 1024], <span class="code-comment">// your persistent memory</span></div>
+        </div>
+        <div style="margin-top:var(--space-2)">  <span class="code-comment">// Must return: how many tokens the AMM gives to the trader</span></div>
+        <div>}</div>
+      </div>
+
+      <div class="animate-in stagger-children" style="display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-3)">
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm)">
+          <div style="font-family:var(--font-mono); font-size:var(--text-lg); font-weight:600; color:#7B6DAA; margin-bottom:var(--space-2)">side</div>
+          <p style="font-size:var(--text-xs); color:var(--color-text-secondary)">Buy X (trader sends Y) or sell X (trader sends X). Tells you which direction the swap goes.</p>
+        </div>
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm)">
+          <div style="font-family:var(--font-mono); font-size:var(--text-lg); font-weight:600; color:#D4A843; margin-bottom:var(--space-2)">reserves</div>
+          <p style="font-size:var(--text-xs); color:var(--color-text-secondary)">Current <span class="term" data-definition="Reserves are the actual token balances locked in the AMM pool. They change after every trade. reserve_x / reserve_y ratio determines the spot price">reserves</span> in the pool. Dividing them gives you the AMM&apos;s current spot price.</p>
+        </div>
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm)">
+          <div style="font-family:var(--font-mono); font-size:var(--text-lg); font-weight:600; color:#2D8B55; margin-bottom:var(--space-2)">storage</div>
+          <p style="font-size:var(--text-xs); color:var(--color-text-secondary)">1024 u64 slots that persist across every trade. Use them to track volatility, recent prices, or any state you need.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 2: The two hard rules -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Two rules you must never break</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">The simulation assumes your function satisfies two mathematical properties. Violate them and the arb / router math breaks down.</p>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); border-top:4px solid var(--color-accent)">
+          <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-4)">Rule 1: <span class="term" data-definition="A function is monotonic if it always moves in one direction. Here: larger input must always produce larger output. If you put in 10, you must get more out than if you put in 5.">Monotonic</span></h3>
+          <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#A6E3A1; margin-bottom:var(--space-4)">
+            output(input=10) &gt; output(input=5)<br>
+            output(input=5)  &gt; output(input=1)
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">More tokens in must always yield more tokens out. If this breaks, arb search algorithms fail to find the optimal trade and the simulation gives wrong results.</p>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); border-top:4px solid var(--color-accent)">
+          <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-4)">Rule 2: <span class="term" data-definition="A function is concave if its marginal return decreases as input grows. Each extra unit of input earns you slightly less output than the previous unit. This prevents infinite-profit exploits.">Concave</span></h3>
+          <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#FAB387; margin-bottom:var(--space-4)">
+            marginal_output(Δ=11) &lt; marginal_output(Δ=10)<br>
+            marginal_output(Δ=10) &lt; marginal_output(Δ=5)
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The rate of output must slow down as input grows. A linear function is the edge case; you must be strictly concave or you create arbitrage exploits against yourself.</p>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-bg-code); border-radius:var(--radius-md); padding:var(--space-6); margin-bottom:var(--space-4)">
+        <div style="color:#6C7086; margin-bottom:var(--space-3); font-family:var(--font-mono); font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.1em">Why the constant-product formula satisfies both rules</div>
+        <div style="font-family:var(--font-mono); font-size:var(--text-sm); color:#CDD6F4; line-height:2">
+          <div>f(Δ) = (ry × Δ) / (rx + Δ)</div>
+          <div style="margin-top:var(--space-2)"><span class="code-comment">// First derivative (always positive → monotonic):</span></div>
+          <div>f&apos;(Δ) = rx × ry / (rx + Δ)² &gt; 0  ✓</div>
+          <div style="margin-top:var(--space-2)"><span class="code-comment">// Second derivative (always negative → concave):</span></div>
+          <div>f&apos;&apos;(Δ) = −2 × rx × ry / (rx + Δ)³ &lt; 0  ✓</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: The afterSwap callback -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The afterSwap callback: your memory</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">After each trade executes, the simulation calls <span class="term" data-definition="afterSwap is an optional callback function you can implement. It fires after every trade and lets you update the 1024 u64 storage slots. This is how your AMM remembers things between trades.">afterSwap</span>, giving you a chance to update your storage. This is how you build memory — track recent prices, estimate volatility, count trades, or update your fee model.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">pub fn</span> <span class="code-function">after_swap</span>(data: &[u8])</span>
+<span class="code-line">    -> [<span class="code-keyword">u64</span>; <span class="code-number">1024</span>] {</span>
+<span class="code-line">  <span class="code-keyword">let</span> d = <span class="code-function">deserialize</span>(data);</span>
+<span class="code-line">  <span class="code-keyword">let mut</span> s = d.storage;</span>
+<span class="code-line">  <span class="code-comment">// s[0] = trade count</span></span>
+<span class="code-line">  s[<span class="code-number">0</span>] += <span class="code-number">1</span>;</span>
+<span class="code-line">  <span class="code-comment">// s[1] = last input amount</span></span>
+<span class="code-line">  s[<span class="code-number">1</span>] = d.input_amount;</span>
+<span class="code-line">  <span class="code-comment">// s[2] = last output amount</span></span>
+<span class="code-line">  s[<span class="code-number">2</span>] = d.output_amount;</span>
+<span class="code-line">  s <span class="code-comment">// return updated storage</span></span>
+<span class="code-line">}</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">after_swap fires after every trade and returns the new storage array.</p>
+            <p class="tl">Deserialize the callback data — it contains the same swap fields plus the actual output_amount.</p>
+            <p class="tl">Take a mutable copy of the current storage (1024 slots of u64).</p>
+            <p class="tl">Increment a trade counter in slot 0 — you now know how many trades have happened.</p>
+            <p class="tl">Remember the last input and output. Next call to compute_swap can read these from storage.</p>
+            <p class="tl">Return the updated storage. These values survive into the next compute_swap call.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:var(--space-4); margin-top:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); box-shadow:var(--shadow-sm); border-top:3px solid #D4A843">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-2)">Idea 1</div>
+          <strong style="font-family:var(--font-display)">Rolling Volatility</strong>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-2)">Store recent reserve ratios and compute implied vol. Widen fees when markets are moving fast.</p>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); box-shadow:var(--shadow-sm); border-top:3px solid #2A7B9B">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-2)">Idea 2</div>
+          <strong style="font-family:var(--font-display)">Flow Imbalance</strong>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-2)">Count buy vs sell orders. If orders are heavily one-sided, price is trending — raise fees.</p>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); box-shadow:var(--shadow-sm); border-top:3px solid #7B6DAA">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-2)">Idea 3</div>
+          <strong style="font-family:var(--font-display)">Virtual Liquidity</strong>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary); margin-top:var(--space-2)">Pretend you have more reserves than you do. Flatter curves attract more retail flow — at the cost of more arb exposure.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 4: The BPF context -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Under the hood: BPF execution</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">Your Rust code compiles to <span class="term" data-definition="BPF (Berkeley Packet Filter), used on Solana as eBPF, is a sandboxed bytecode format. Your Rust program compiles to BPF and runs inside a virtual machine — the same way Solana smart contracts run on-chain">BPF</span> bytecode and executes inside a virtual machine. The executor loads your compiled program, passes the swap data as input bytes, and reads back the u64 output. This is exactly how Solana programs run on-chain.</p>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-md); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-bg-warm); padding:var(--space-4) var(--space-6); border-bottom:1px solid var(--color-border); font-family:var(--font-mono); font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted)">Execution pipeline</div>
+        <div style="padding:var(--space-6); display:flex; align-items:center; gap:var(--space-4); flex-wrap:wrap; justify-content:center">
+          <div style="text-align:center; min-width:100px">
+            <div style="background:var(--color-accent-light); border:2px solid var(--color-accent); border-radius:var(--radius-sm); padding:var(--space-3) var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-2)">lib.rs</div>
+            <div style="font-size:var(--text-xs); color:var(--color-text-muted)">Your Rust source</div>
+          </div>
+          <div style="color:var(--color-text-muted); font-size:1.5rem">→</div>
+          <div style="text-align:center; min-width:100px">
+            <div style="background:#EEE9F7; border:2px solid #7B6DAA; border-radius:var(--radius-sm); padding:var(--space-3) var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-2)">cargo build</div>
+            <div style="font-size:var(--text-xs); color:var(--color-text-muted)">Compiles to BPF bytecode</div>
+          </div>
+          <div style="color:var(--color-text-muted); font-size:1.5rem">→</div>
+          <div style="text-align:center; min-width:100px">
+            <div style="background:#E4F2F7; border:2px solid #2A7B9B; border-radius:var(--radius-sm); padding:var(--space-3) var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-2)">.so file</div>
+            <div style="font-size:var(--text-xs); color:var(--color-text-muted)">Shared object loaded by executor</div>
+          </div>
+          <div style="color:var(--color-text-muted); font-size:1.5rem">→</div>
+          <div style="text-align:center; min-width:100px">
+            <div style="background:var(--color-success-light); border:2px solid var(--color-success); border-radius:var(--radius-sm); padding:var(--space-3) var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-2)">BpfAmm</div>
+            <div style="font-size:var(--text-xs); color:var(--color-text-muted)">Calls your function per trade</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="quiz-container animate-in" id="quiz-module3">
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Correct — storage persists across trades. You write to it in after_swap and read from it in the next compute_swap call."
+             data-explanation-wrong="The storage array is how you communicate state between calls. It persists because after_swap returns a new version that gets passed back on the next call.">
+          <h3 class="quiz-question">How does your AMM remember information from one trade to the next?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Write data to the storage array in after_swap; read it in compute_swap</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Use global Rust variables — they persist between function calls</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The reserves encode all necessary history</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Right. A concave function has a negative second derivative — diminishing returns. The constant-product formula qualifies."
+             data-explanation-wrong="Concave means the marginal output decreases as input grows — each extra unit earns less than the previous. Think of a curve that bends inward.">
+          <h3 class="quiz-question">Which property does &quot;concave&quot; describe?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Output always increases — more in, more out</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Each additional unit of input earns slightly less output than the last</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The function is symmetric around zero</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Edge: The Profit Formula</h1>
+      <p class="module-subtitle">Every trade makes you money or costs you money. Here is the exact math that determines which.</p>
+    </header>
+
+    <!-- Screen 1: What is edge? -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Edge = what you earn at fair value</h2>
+
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary); margin-bottom:var(--space-6)"><span class="term" data-definition="Edge is the profit an AMM makes measured in fair-value terms. For every trade, you compute what you gave away and what you received, both priced at the current fair market price. Positive edge means you profited.">Edge</span> is not the same as cash profit. It is the profit you made if every token were immediately valued at its current fair price. This matters because the simulation resets at fair value each step — you cannot let tokens accumulate at stale prices.</p>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); margin-bottom:var(--space-6)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); border-left:5px solid #2D8B55">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-4)">
+            <div style="width:44px; height:44px; background:#2D8B55; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.3rem; flex-shrink:0">+</div>
+            <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; color:#2D8B55">Retail Trade Edge</h3>
+          </div>
+          <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#A6E3A1; margin-bottom:var(--space-4)">
+            <div><span class="code-comment">// AMM sells X to trader</span></div>
+            <div>edge = amount_y_in</div>
+            <div>     - amount_x_out × fair_price</div>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">You received Y. You gave away X. Your spread is the gap between the Y you got and what that X was worth at fair price. This is positive when your fee &gt; 0.</p>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); border-left:5px solid #D94F30">
+          <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-4)">
+            <div style="width:44px; height:44px; background:#D94F30; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.3rem; flex-shrink:0">−</div>
+            <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; color:#D94F30">Arb Trade Edge</h3>
+          </div>
+          <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#F38BA8; margin-bottom:var(--space-4)">
+            <div><span class="code-comment">// AMM buys X at stale price</span></div>
+            <div>edge = amount_x_in × fair_price</div>
+            <div>     - amount_y_out</div>
+          </div>
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The arb paid you too little Y for too much X. You overpaid for X relative to its fair price. This is always negative — <span class="term" data-definition="Adverse selection is the loss AMMs suffer from informed traders (arbitrageurs) who only trade when the AMM price is worse than fair value. The AMM always loses to arbs because arbs have better price information.">adverse selection</span> is unavoidable.</p>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-accent-light); border:2px solid var(--color-accent); border-radius:var(--radius-md); padding:var(--space-6); text-align:center">
+        <div style="font-family:var(--font-display); font-size:var(--text-2xl); font-weight:700; margin-bottom:var(--space-2)">Net Edge = Retail Spread − Arb Losses</div>
+        <p style="color:var(--color-text-secondary); font-size:var(--text-sm)">Win the challenge by making this number bigger than the normalizer&apos;s. You can do it by earning more retail spread, losing less to arbs, or both.</p>
+      </div>
+    </div>
+
+    <!-- Screen 2: The code from engine.rs decoded -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The exact edge calculation from the source</h2>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-comment">// From engine.rs</span></span>
+<span class="code-line"><span class="code-keyword">let</span> trade_edge = <span class="code-keyword">if</span> trade.amm_buys_x {</span>
+<span class="code-line">  trade.amount_x * fair_price</span>
+<span class="code-line">    - trade.amount_y</span>
+<span class="code-line">} <span class="code-keyword">else</span> {</span>
+<span class="code-line">  trade.amount_y</span>
+<span class="code-line">    - trade.amount_x * fair_price</span>
+<span class="code-line">};</span>
+<span class="code-line">submission_edge += trade_edge;</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">For every single trade that touches your AMM, this formula runs.</p>
+            <p class="tl">If your AMM is buying X (trader sells X to you): value received = amount_x × fair_price. Subtract amount_y you paid. This is the arb scenario — usually negative.</p>
+            <p class="tl">If your AMM is selling X (trader buys X from you): value received = amount_y. Subtract amount_x × fair_price — what that X was actually worth. This is the retail scenario — usually positive.</p>
+            <p class="tl">Accumulate edge across all 10,000 steps. This single running total is your final score.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); margin-top:var(--space-6)">
+        <h3 style="font-family:var(--font-display); font-weight:700; font-size:var(--text-lg); margin-bottom:var(--space-4)">Worked example</h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4)">
+          <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-4)">
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; color:var(--color-error); margin-bottom:var(--space-2)">Arb trade (bad for you)</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); line-height:1.8">
+              Fair price: 2.00 Y/X<br>
+              Arb sells 50 X, gets 98 Y<br>
+              Edge = (50 × 2.00) − 98<br>
+              Edge = 100 − 98 = <strong style="color:var(--color-error)">+2.0</strong><br>
+              Wait — arb edge is <em>positive for arb</em>.<br>
+              For YOU: <strong style="color:var(--color-error)">−2.0</strong>
+            </div>
+          </div>
+          <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-4)">
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; color:var(--color-success); margin-bottom:var(--space-2)">Retail trade (good for you)</div>
+            <div style="font-size:var(--text-sm); color:var(--color-text-secondary); line-height:1.8">
+              Fair price: 2.00 Y/X<br>
+              Trader sends 20 Y, gets 9.5 X<br>
+              Edge = 20 − (9.5 × 2.00)<br>
+              Edge = 20 − 19.0 = <strong style="color:var(--color-success)">+1.0</strong><br>
+              You kept 1 Y worth of spread.<br>
+              <strong style="color:var(--color-success)">+1.0</strong> to your score.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: The tension -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">The fundamental tension</h2>
+      <p class="animate-in" style="font-size:var(--text-lg); color:var(--color-text-secondary); margin-bottom:var(--space-6)">There is a brutal tradeoff at the heart of every AMM. Higher fees protect you from arbs — but also drive retail traders to the normalizer instead.</p>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-md); margin-bottom:var(--space-6)">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr">
+          <div style="padding:var(--space-5); border-right:1px solid var(--color-border); text-align:center">
+            <div style="font-family:var(--font-display); font-size:var(--text-3xl); font-weight:800; color:#D94F30; margin-bottom:var(--space-2)">Low fee</div>
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">e.g. 10 bps</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-2)">
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Attracts max retail flow</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ Tiny spread per trade</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ Bleeds badly to arbs</div>
+            </div>
+          </div>
+          <div style="padding:var(--space-5); border-right:1px solid var(--color-border); text-align:center; background:var(--color-accent-light)">
+            <div style="font-family:var(--font-display); font-size:var(--text-3xl); font-weight:800; color:var(--color-accent); margin-bottom:var(--space-2)">Sweet spot</div>
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">depends on market</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-2)">
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Competitive with normalizer</div>
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Enough spread to cover arbs</div>
+              <div style="background:var(--color-accent-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-accent)">↑ Varies by vol, flow, opp fee</div>
+            </div>
+          </div>
+          <div style="padding:var(--space-5); text-align:center">
+            <div style="font-family:var(--font-display); font-size:var(--text-3xl); font-weight:800; color:#2A7B9B; margin-bottom:var(--space-2)">High fee</div>
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">e.g. 300 bps</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-2)">
+              <div style="background:var(--color-success-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-success)">✓ Arb losses stay small</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ No retail trades routed to you</div>
+              <div style="background:var(--color-error-light); border-radius:var(--radius-sm); padding:var(--space-2); font-size:var(--text-xs); color:var(--color-error)">✗ Zero spread revenue</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="animate-in" style="color:var(--color-text-secondary)">The optimal fee is not fixed — it depends on current <span class="term" data-definition="Volatility in market microstructure determines how frequently the fair price moves past your quoted price. High vol = more arb. The optimal fee scales roughly with the square root of volatility in many theoretical models.">volatility</span>, retail flow intensity, and what the normalizer is charging. Static fees leave money on the table. The best strategies adapt.</p>
+    </div>
+
+    <!-- Screen 4: The chat — arb vs retail explaining their economics -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Adversarial economics: arb explains itself</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-4)">The arbitrageur is not evil — it is doing what rational actors do. Here is the economic logic.</p>
+
+      <div class="chat-window animate-in" id="chat-module4">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="arb" style="display:none">
+            <div class="chat-avatar" style="background:#D94F30">🦈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D94F30">Arbitrageur</span>
+              <p>I am not attacking you personally. I am just a loop in engine.rs that maximizes profit. When your price diverges from fair value, I am extracting that divergence.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>Every time the price moves, you are waiting with the golden-section search to find the exact optimal trade size. How does that work exactly?</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="arb" style="display:none">
+            <div class="chat-avatar" style="background:#D94F30">🦈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D94F30">Arbitrageur</span>
+              <p>I search over all possible trade sizes using golden-section search. My profit function is concave in trade size — it goes up, peaks, then comes back down. I find the peak precisely.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>So a higher fee does not stop you — it just makes my price diverge more before you profit enough to bother. You wait for a bigger gap before trading?</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="arb" style="display:none">
+            <div class="chat-avatar" style="background:#D94F30">🦈</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D94F30">Arbitrageur</span>
+              <p>Exactly. Your fee is a threshold I have to clear. Higher fee = smaller arb trade per step, but you also fall further behind fair value before I act. The net effect on your edge is subtle.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="5" data-sender="retail" style="display:none">
+            <div class="chat-avatar" style="background:#2D8B55">🛍️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#2D8B55">Retail Trader</span>
+              <p>For the record, I just want the best price. The router does all the thinking for me. If you charge too much, I get sent to the normalizer and you earn nothing on my order.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="6" data-sender="youramm" style="display:none">
+            <div class="chat-avatar" style="background:#D4A843">⚙️</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color:#D4A843">Your AMM</span>
+              <p>So my whole strategy is: charge just enough to cover my expected arb loss per step, while staying competitive enough to steal retail flow from the normalizer. Easy in theory.</p>
+            </div>
+          </div>
+        </div>
+        <div class="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module4-typing-avatar" style="background:#D94F30">?</div>
+          <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+        </div>
+        <div class="chat-controls" style="padding:var(--space-4); border-top:1px solid var(--color-border); display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap">
+          <button class="btn chat-next-btn" style="background:var(--color-accent); color:white; border:none; padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Next Message</button>
+          <button class="btn chat-all-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Play All</button>
+          <button class="btn chat-reset-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-4); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Replay</button>
+          <span class="chat-progress" style="margin-left:auto; font-size:var(--text-sm); color:var(--color-text-muted); font-family:var(--font-mono)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 5: Quiz -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Check your understanding</h2>
+
+      <div class="quiz-container animate-in" id="quiz-module4">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Correct. Retail edge = amount_y_received − amount_x_given × fair_price. The spread is what you keep above fair value."
+             data-explanation-wrong="Think about what you give and what you receive, both priced at fair value. The retail trader gives you Y and gets X.">
+          <h3 class="quiz-question">A retail trader sends 30 Y and gets 14 X when fair price is 2.0 Y/X. What is your edge on this trade?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>+30 Y (you received the full input)</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>+2 Y (30 received minus 14×2.0 = 28 given at fair value)</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>−2 Y (you lost to the trader)</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Exactly right. You cannot avoid adverse selection — arbs always trade when it is profitable for them, meaning it is unprofitable for you. The best you can do is minimize how much they take."
+             data-explanation-wrong="Adverse selection from arbitrageurs is a structural feature of AMMs — they only trade when your price is wrong. The question is how much they take, not whether they trade.">
+          <h3 class="quiz-question">Can your AMM design fully eliminate adverse selection losses from arbitrageurs?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes — set a high enough fee and arbs will not trade</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes — use storage to track price and close the gap proactively</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No — arbs always profit when price moves; you can reduce but not eliminate losses</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-5" style="background: var(--color-bg)">
+  <div class="module-content">
+
+    <header class="module-header animate-in">
+      <span class="module-number">05</span>
+      <h1 class="module-title">Strategy Space</h1>
+      <p class="module-subtitle">Dynamic fees. Virtual reserves. Adaptive curves. Here is what separates a good AMM from a great one.</p>
+    </header>
+
+    <!-- Screen 1: The strategy landscape -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Three axes of innovation</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">The starter code is a static 5% fee constant-product AMM. Any single improvement can beat it. The best submissions combine all three axes.</p>
+
+      <div class="animate-in stagger-children" style="display:flex; flex-direction:column; gap:var(--space-4); margin-bottom:var(--space-6)">
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); display:grid; grid-template-columns:auto 1fr; gap:var(--space-6); align-items:start">
+          <div style="width:64px; height:64px; background:linear-gradient(135deg,#FDF5E0,#D4A843); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:2rem; flex-shrink:0">📐</div>
+          <div>
+            <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-2)">Axis 1: Curve Shape</h3>
+            <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The constant-product formula is just one valid concave curve. You can use a <span class="term" data-definition="Concentrated liquidity (used by Uniswap v3) puts all liquidity between a price range [a, b] instead of across the whole curve. It earns more spread per dollar of liquidity — but only when price stays in range.">concentrated liquidity</span> design (tighter curve in a price band), a <span class="term" data-definition="A stableswap curve is much flatter than constant-product near the current price, then steep at the extremes. It provides very low slippage for small trades and is optimal when the two tokens are correlated.">stableswap-style</span> flat curve, or your own custom function. Flatter curves attract more retail volume by offering lower <span class="term" data-definition="Slippage is the difference between the price you expected and the price you actually got. Higher slippage = worse deal for the trader. AMMs with flatter curves have lower slippage on small trades.">slippage</span>.</p>
+          </div>
+        </div>
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); display:grid; grid-template-columns:auto 1fr; gap:var(--space-6); align-items:start">
+          <div style="width:64px; height:64px; background:linear-gradient(135deg,#E4F2F7,#2A7B9B); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:2rem; flex-shrink:0">⚡</div>
+          <div>
+            <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-2)">Axis 2: Dynamic Fees</h3>
+            <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">A fixed fee is sub-optimal almost by definition. In volatile markets, a higher fee covers your arb losses. In calm markets, a tighter fee steals more retail flow. Reading the storage to estimate current volatility and adjusting your fee accordingly is one of the highest-leverage improvements you can make.</p>
+          </div>
+        </div>
+        <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); padding:var(--space-6); box-shadow:var(--shadow-md); display:grid; grid-template-columns:auto 1fr; gap:var(--space-6); align-items:start">
+          <div style="width:64px; height:64px; background:linear-gradient(135deg,#E8F5EE,#2D8B55); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:2rem; flex-shrink:0">🧠</div>
+          <div>
+            <h3 style="font-family:var(--font-display); font-size:var(--text-xl); font-weight:700; margin-bottom:var(--space-2)">Axis 3: State & Memory</h3>
+            <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">The 1024-slot storage is your unfair advantage. A stateless AMM is flying blind. Track reserve ratios across recent steps to estimate <span class="term" data-definition="Realized volatility is the actual standard deviation of returns computed from past price observations. You can estimate it from past reserve ratios, since those reflect actual price moves.">realized volatility</span>, detect trending markets, or count buy/sell imbalance. Each observation makes your next trade more informed.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 2: Dynamic fee code walkthrough -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">A dynamic fee implementation, decoded</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-4)">Here is one concrete way to adapt your fee to estimated market volatility using the storage buffer.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">pub fn</span> <span class="code-function">compute_swap</span>(data: &[u8]) -> u64 {</span>
+<span class="code-line">  <span class="code-keyword">let</span> d = <span class="code-function">deserialize</span>(data);</span>
+<span class="code-line">  <span class="code-comment">// Read estimated vol from storage</span></span>
+<span class="code-line">  <span class="code-keyword">let</span> est_vol = d.storage[<span class="code-number">0</span>];</span>
+<span class="code-line">  <span class="code-comment">// Scale fee: base 30bps + vol term</span></span>
+<span class="code-line">  <span class="code-keyword">let</span> fee_bps = <span class="code-number">30</span> + est_vol / <span class="code-number">100</span>;</span>
+<span class="code-line">  <span class="code-keyword">let</span> scale = <span class="code-number">10000</span> - fee_bps;</span>
+<span class="code-line">  <span class="code-keyword">let</span> fi = d.input_amount * scale / <span class="code-number">10000</span>;</span>
+<span class="code-line">  <span class="code-keyword">let</span> rx = d.reserve_x <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  <span class="code-keyword">let</span> ry = d.reserve_y <span class="code-keyword">as</span> u128;</span>
+<span class="code-line">  ((ry * fi) / (rx + fi)) <span class="code-keyword">as</span> u64</span>
+<span class="code-line">}</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl">Start by deserializing — same as always.</p>
+            <p class="tl">Read slot 0 of storage. Some earlier call to after_swap put an estimated volatility measure here (e.g. in units of 1/10000).</p>
+            <p class="tl">Dynamic fee = a 30 bps floor plus a vol-proportional top-up. In calm markets: ~30 bps. In wild markets: higher.</p>
+            <p class="tl">Convert fee to a multiplier: 10000 minus fee in bps. Apply to input to get the fee-adjusted swap amount.</p>
+            <p class="tl">Run the standard constant-product formula with the dynamic fee_input. Higher vol = higher fee = less output to trader = more protection for you.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: Virtual reserves concept -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">Virtual reserves: fake it to attract it</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">Instead of using your actual reserve sizes, you can swap against inflated "virtual" reserves. This makes your curve flatter — lower <span class="term" data-definition="Price impact is how much a trade moves the quoted price. Using virtual reserves larger than actual reserves reduces price impact, making your AMM look more liquid than it is. Retail traders prefer low price impact.">price impact</span> — attracting more retail volume at the cost of tighter margins.</p>
+
+      <div class="animate-in" style="background:var(--color-surface); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-md); margin-bottom:var(--space-6)">
+        <div style="display:grid; grid-template-columns:1fr 1fr">
+          <div style="padding:var(--space-6); border-right:1px solid var(--color-border)">
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-text-muted); margin-bottom:var(--space-3)">Real reserves</div>
+            <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#CDD6F4; margin-bottom:var(--space-3)">
+              rx = 1000, ry = 2000<br>
+              <span class="code-comment">// For 20Y input:</span><br>
+              <span class="code-keyword">out</span> = (2000×20)/(1000+20)<br>
+              <span class="code-keyword">out</span> = 39.2 X
+            </div>
+            <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">Price impact of 20Y trade: ~1.0%. The standard curve.</p>
+          </div>
+          <div style="padding:var(--space-6)">
+            <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-accent); margin-bottom:var(--space-3)">Virtual reserves (2×)</div>
+            <div style="background:var(--color-bg-code); border-radius:var(--radius-sm); padding:var(--space-4); font-family:var(--font-mono); font-size:var(--text-sm); color:#CDD6F4; margin-bottom:var(--space-3)">
+              rx = 2000, ry = 4000<br>
+              <span class="code-comment">// For 20Y input:</span><br>
+              <span class="code-keyword">out</span> = (4000×20)/(2000+20)<br>
+              <span class="code-keyword">out</span> = 39.6 X
+            </div>
+            <p style="font-size:var(--text-sm); color:var(--color-text-secondary)">Price impact: ~0.5%. Trader gets 0.4 more X. They prefer this AMM. You win the flow.</p>
+          </div>
+        </div>
+        <div style="background:var(--color-accent-light); padding:var(--space-4) var(--space-6); border-top:1px solid var(--color-border)">
+          <p style="font-size:var(--text-sm); color:var(--color-text-secondary)"><strong>The catch:</strong> virtual reserves also amplify arb losses. A flatter curve means arbs can extract more value per dollar of price move. You must pair virtual reserves with a higher dynamic fee to stay net-positive.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 4: Putting it all together — flow animation -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">How an adaptive AMM thinks each step</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">Step through the mental model of a well-designed adaptive AMM reacting to a high-volatility market.</p>
+
+      <div class="flow-animation animate-in" data-steps='[
+        {"highlight":"flow-storage2","label":"Step 1 — Read memory: compute_swap reads storage[0] (rolling vol estimate) and storage[1] (trade count). This tells it how volatile the last N steps were."},
+        {"highlight":"flow-fee2","label":"Step 2 — Set dynamic fee: Based on vol estimate, the AMM picks a fee. High recent vol = wider fee (e.g. 120 bps). Calm = narrow fee (e.g. 35 bps).","packet":true,"from":"storage2","to":"fee2"},
+        {"highlight":"flow-virt2","label":"Step 3 — Apply virtual reserves: Multiply actual reserves by a liquidity multiplier from storage. Flat curve attracts retail. More risk, more reward.","packet":true,"from":"fee2","to":"virt2"},
+        {"highlight":"flow-output2","label":"Step 4 — Compute output: Apply constant-product formula with virtual reserves and dynamic fee. Return the output amount.","packet":true,"from":"virt2","to":"output2"},
+        {"highlight":"flow-afters2","label":"Step 5 — afterSwap fires: Update storage with new reserve ratio, increment vol estimate using exponential moving average.","packet":true,"from":"output2","to":"afters2"},
+        {"highlight":"flow-storage2","label":"Step 6 — Ready for next trade: The updated storage feeds back into the next compute_swap call. The AMM learned from this trade.","packet":true,"from":"afters2","to":"storage2"}
+      ]'>
+        <div class="flow-actors" style="display:flex; flex-wrap:wrap; gap:var(--space-4); justify-content:center; margin-bottom:var(--space-6)">
+          <div class="flow-actor" id="flow-storage2" style="border-color:#7B6DAA">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#EEE9F7,#7B6DAA)">💾</div>
+            <span>Storage</span>
+          </div>
+          <div class="flow-actor" id="flow-fee2" style="border-color:#D4A843">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#FDF5E0,#D4A843)">📊</div>
+            <span>Fee Model</span>
+          </div>
+          <div class="flow-actor" id="flow-virt2" style="border-color:#2A7B9B">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#E4F2F7,#2A7B9B)">🔮</div>
+            <span>Virtual Reserves</span>
+          </div>
+          <div class="flow-actor" id="flow-output2" style="border-color:#2D8B55">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#E8F5EE,#2D8B55)">✓</div>
+            <span>Output</span>
+          </div>
+          <div class="flow-actor" id="flow-afters2" style="border-color:#D94F30">
+            <div class="flow-actor-icon" style="background:linear-gradient(135deg,#FDEEE9,#D94F30)">🔄</div>
+            <span>afterSwap</span>
+          </div>
+        </div>
+        <div class="flow-packet" id="flow-packet-2"></div>
+        <div class="flow-step-label" id="flow-label" style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); margin-bottom:var(--space-4); font-size:var(--text-sm); color:var(--color-text-secondary); min-height:3.5rem; box-shadow:var(--shadow-sm)">Click "Next Step" to begin</div>
+        <div class="flow-controls">
+          <button class="btn flow-next-btn" style="background:var(--color-accent); color:white; border:none; padding:var(--space-2) var(--space-5); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer">Next Step</button>
+          <button class="btn flow-reset-btn" style="background:var(--color-surface); color:var(--color-text-secondary); border:1px solid var(--color-border); padding:var(--space-2) var(--space-5); border-radius:var(--radius-sm); font-family:var(--font-body); font-weight:600; cursor:pointer; margin-left:var(--space-3)">Restart</button>
+          <span class="flow-progress" style="margin-left:var(--space-4); font-size:var(--text-sm); color:var(--color-text-muted); font-family:var(--font-mono)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 5: The leaderboard mindset + final quiz -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">What actually works</h2>
+      <p class="animate-in" style="color:var(--color-text-secondary); margin-bottom:var(--space-6)">The challenge runs across 1,000 markets with wildly different parameters. Strategies that are locally optimal (great for one market type) often fail globally. Robustness matters as much as peak performance.</p>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); margin-bottom:var(--space-8)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); box-shadow:var(--shadow-sm); border-left:4px solid var(--color-success)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-success); margin-bottom:var(--space-3)">Strategies that tend to work</div>
+          <ul style="list-style:none; display:flex; flex-direction:column; gap:var(--space-2)">
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-success)">✓</span> <span class="term" data-definition="An exponential moving average (EMA) weights recent observations more heavily than old ones. It is computed as: ema_new = alpha * new_value + (1-alpha) * ema_old, where alpha is a smoothing factor between 0 and 1.">EMA</span>-based vol estimation with fee response</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-success)">✓</span> Moderate virtual reserves (1.2× to 1.8×)</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-success)">✓</span> Fee floors to avoid getting wiped on vol spikes</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-success)">✓</span> Being just slightly cheaper than the normalizer</li>
+          </ul>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-5); box-shadow:var(--shadow-sm); border-left:4px solid var(--color-error)">
+          <div style="font-size:var(--text-xs); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.1em; color:var(--color-error); margin-bottom:var(--space-3)">Common traps</div>
+          <ul style="list-style:none; display:flex; flex-direction:column; gap:var(--space-2)">
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-error)">✗</span> Static fees (the starter template)</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-error)">✗</span> Too-aggressive virtual reserves without higher fees</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-error)">✗</span> Over-fitting to one volatility regime</li>
+            <li style="font-size:var(--text-sm); color:var(--color-text-secondary); display:flex; gap:var(--space-2)"><span style="color:var(--color-error)">✗</span> Breaking monotonicity or concavity</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="quiz-container animate-in" id="quiz-module5">
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Correct. Virtual reserves reduce price impact (attracting retail), but a larger virtual pool also means the arb can take more per step. You must compensate with a higher fee."
+             data-explanation-wrong="Virtual reserves change the shape of the curve, which affects both retail attractiveness and arb exposure. Think about what happens to both sides of the edge equation.">
+          <h3 class="quiz-question">You double your virtual reserves (2×) to attract more retail flow. What must you also do to keep net edge positive?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Halve your fee to stay competitive with the normalizer</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Raise your fee to compensate for increased arb exposure</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Nothing — doubling reserves does not affect arb losses</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Right. The 1,000 markets cover many volatility regimes, retail flow levels, and normalizer configurations. A strategy that works for one combination may fail badly for another. Robustness beats peak performance."
+             data-explanation-wrong="The challenge averages across 1,000 diverse markets. A strategy that is spectacular on 100 markets but terrible on the other 900 will lose overall.">
+          <h3 class="quiz-question">Why should your strategy be robust across all 1,000 markets rather than perfectly tuned to one?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Markets have wildly different vol, flow, and normalizer parameters — no single tuning fits all</span></button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The simulation picks the worst market for you and uses that as the score</span></button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Over-tuning is allowed but considered unsportsmanlike</span></button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+      </div>
+    </div>
+
+    <!-- Screen 6: Final call to action -->
+    <div class="screen">
+      <h2 class="screen-heading animate-in">You know everything you need</h2>
+
+      <div class="animate-in" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr 1fr; gap:var(--space-3); margin-bottom:var(--space-8)">
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm); border-top:3px solid #D4A843">
+          <div style="font-size:1.5rem; margin-bottom:var(--space-2)">🤖</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-sm); font-weight:700; margin-bottom:var(--space-1)">Module 1</div>
+          <div style="font-size:var(--text-xs); color:var(--color-text-muted)">AMMs use math, not people</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm); border-top:3px solid #7B6DAA">
+          <div style="font-size:1.5rem; margin-bottom:var(--space-2)">⚔️</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-sm); font-weight:700; margin-bottom:var(--space-1)">Module 2</div>
+          <div style="font-size:var(--text-xs); color:var(--color-text-muted)">10k steps, 4 actors, 1k markets</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm); border-top:3px solid #2A7B9B">
+          <div style="font-size:1.5rem; margin-bottom:var(--space-2)">⚙️</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-sm); font-weight:700; margin-bottom:var(--space-1)">Module 3</div>
+          <div style="font-size:var(--text-xs); color:var(--color-text-muted)">compute_swap: one fn, all power</div>
+        </div>
+        <div style="background:var(--color-surface); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm); border-top:3px solid #D94F30">
+          <div style="font-size:1.5rem; margin-bottom:var(--space-2)">📈</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-sm); font-weight:700; margin-bottom:var(--space-1)">Module 4</div>
+          <div style="font-size:var(--text-xs); color:var(--color-text-muted)">Edge = spread minus arb loss</div>
+        </div>
+        <div style="background:var(--color-accent-light); border-radius:var(--radius-md); padding:var(--space-4); text-align:center; box-shadow:var(--shadow-sm); border-top:3px solid var(--color-accent)">
+          <div style="font-size:1.5rem; margin-bottom:var(--space-2)">🏆</div>
+          <div style="font-family:var(--font-display); font-size:var(--text-sm); font-weight:700; margin-bottom:var(--space-1)">Module 5</div>
+          <div style="font-size:var(--text-xs); color:var(--color-text-muted)">Dynamic fees win</div>
+        </div>
+      </div>
+
+      <div class="animate-in" style="background:var(--color-bg-code); border-radius:var(--radius-lg); padding:var(--space-8); text-align:center; box-shadow:var(--shadow-xl)">
+        <div style="font-family:var(--font-display); font-size:var(--text-3xl); font-weight:800; color:#D4A843; margin-bottom:var(--space-4)">Now open programs/starter/src/lib.rs</div>
+        <p style="color:#CDD6F4; font-size:var(--text-lg); margin-bottom:var(--space-6)">Replace the static 5% fee with something adaptive. Use storage. Estimate volatility. Beat the normalizer across all 1,000 markets.</p>
+        <div style="font-family:var(--font-mono); font-size:var(--text-sm); color:#6C7086; border-top:1px solid #313244; padding-top:var(--space-4)">
+          cargo run --release -- simulate programs/starter/target/deploy/starter.so
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+  </main>
+
+</body>
+</html>

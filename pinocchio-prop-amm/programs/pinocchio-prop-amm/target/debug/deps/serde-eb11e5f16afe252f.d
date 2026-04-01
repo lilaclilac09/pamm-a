@@ -1,0 +1,14 @@
+/Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/deps/serde-eb11e5f16afe252f.d: /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/build/serde-7e8e0060073c9b5b/out/private.rs
+
+/Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/deps/libserde-eb11e5f16afe252f.rlib: /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/build/serde-7e8e0060073c9b5b/out/private.rs
+
+/Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/deps/libserde-eb11e5f16afe252f.rmeta: /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/build/serde-7e8e0060073c9b5b/out/private.rs
+
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/build/serde-7e8e0060073c9b5b/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/aileen/pamm-a/pinocchio-prop-amm/programs/pinocchio-prop-amm/target/debug/build/serde-7e8e0060073c9b5b/out
