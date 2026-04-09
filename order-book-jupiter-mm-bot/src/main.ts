@@ -20,6 +20,9 @@ const JITO_TIP = parseFloat(process.env.JITO_TIP!) * LAMPORTS_PER_SOL;
 let inventoryMap = new Map<string, number>();
 let dailyPnL = 0;
 let lastTotalBalance = 0;
+let cycleCount = 0;
+let botStartTime = Date.now();
+const tradeLog: { ts: number; token: string; side: string; price: number; amount: number }[] = [];
 
 // 轻量 Order Book（受 order_book_server 启发）
 const orderBook = new Map<string, { bid: number; ask: number; depth: number }>();
@@ -29,18 +32,77 @@ const orderBook = new Map<string, { bid: number; ask: number; depth: number }>()
 const PYTH_FEED_IDS: string[] = (process.env.PYTH_FEED_IDS ?? '').split(',').map(s => s.trim());
 
 async function main() {
-    console.log("🚀 Order Book Style Jupiter MM Bot 已启动（受 lilaclilac09/order_book_server 启发）");
+    console.log("🚀 Order Book Style Jupiter MM Bot starting...");
 
     lastTotalBalance = await getTotalSOLBalance();
+    botStartTime = Date.now();
+
+    startMetricsServer();
 
     setInterval(async () => {
         try {
+            cycleCount++;
             await runMarketMakingCycle();
         } catch (err: any) {
-            console.error("Cycle 错误:", err.message);
+            console.error("Cycle error:", err.message);
         }
     }, parseInt(process.env.UPDATE_INTERVAL!));
 }
+
+function startMetricsServer() {
+    const app = express();
+    const port = parseInt(process.env.METRICS_PORT ?? '3000');
+
+    app.get('/health', (_req, res) => {
+        res.json({
+            status: 'running',
+            uptime_s: Math.floor((Date.now() - botStartTime) / 1000),
+            cycles: cycleCount,
+        });
+    });
+
+    app.get('/metrics', (_req, res) => {
+        const tokens: Record<string, object> = {};
+        for (const [mint, inventory] of inventoryMap) {
+            const book = orderBook.get(mint);
+            tokens[mint] = {
+                inventory,
+                bid: book?.bid ?? null,
+                ask: book?.ask ?? null,
+                depth: book?.depth ?? null,
+            };
+        }
+        res.json({
+            wallet: wallet.publicKey.toBase58(),
+            sol_balance: lastTotalBalance,
+            daily_pnl_pct: (dailyPnL * 100).toFixed(4),
+            cycles: cycleCount,
+            uptime_s: Math.floor((Date.now() - botStartTime) / 1000),
+            tokens,
+        });
+    });
+
+    // SSE — real-time trade stream
+    app.get('/events', (req, res) => {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+
+        // Send last 20 trades on connect
+        for (const t of tradeLog.slice(-20)) {
+            res.write(`data: ${JSON.stringify(t)}\n\n`);
+        }
+
+        tradeEmitter.on('trade', (t) => res.write(`data: ${JSON.stringify(t)}\n\n`));
+        req.on('close', () => tradeEmitter.removeAllListeners('trade'));
+    });
+
+    app.listen(port, () => console.log(`Metrics: http://localhost:${port}/metrics`));
+}
+
+import { EventEmitter } from 'events';
+const tradeEmitter = new EventEmitter();
 
 async function runMarketMakingCycle() {
     const currentSOL = await getTotalSOLBalance();
@@ -197,7 +259,11 @@ async function executeTrade(tokenMint: PublicKey, isBuy: boolean, price: number,
         });
         if (!jitoResp.ok) throw new Error(`Jito bundle error: ${jitoResp.status}`);
 
-        console.log(`✅ [${tokenMint.toBase58().slice(0,6)}] ${isBuy ? '买入' : '卖出'} ${maxAmount.toFixed(4)} SOL @ ${price.toFixed(8)}`);
+        const entry = { ts: Date.now(), token: tokenMint.toBase58(), side: isBuy ? 'buy' : 'sell', price, amount: maxAmount };
+        tradeLog.push(entry);
+        if (tradeLog.length > 500) tradeLog.shift();
+        tradeEmitter.emit('trade', entry);
+        console.log(`✅ [${tokenMint.toBase58().slice(0,6)}] ${isBuy ? 'buy' : 'sell'} ${maxAmount.toFixed(4)} SOL @ ${price.toFixed(8)}`);
     } catch (err: any) {
         console.error(`❌ executeTrade 失败:`, err.message);
     }
