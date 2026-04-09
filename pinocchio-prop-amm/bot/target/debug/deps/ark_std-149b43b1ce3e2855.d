@@ -1,0 +1,12 @@
+/Users/aileen/pamm-a/pinocchio-prop-amm/bot/target/debug/deps/ark_std-149b43b1ce3e2855.d: /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/lib.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/io/mod.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/io/error.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/error.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/rand_helper.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/perf_trace.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/iterable/mod.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/iterable/rev.rs
+
+/Users/aileen/pamm-a/pinocchio-prop-amm/bot/target/debug/deps/libark_std-149b43b1ce3e2855.rmeta: /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/lib.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/io/mod.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/io/error.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/error.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/rand_helper.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/perf_trace.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/iterable/mod.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/iterable/rev.rs
+
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/lib.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/io/mod.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/io/error.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/error.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/rand_helper.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/perf_trace.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/iterable/mod.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-std-0.4.0/src/iterable/rev.rs:

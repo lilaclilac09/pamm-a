@@ -1,0 +1,11 @@
+/Users/aileen/pamm-a/pinocchio-prop-amm/bot/target/debug/deps/digest-1ae712a76512d53e.d: /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/lib.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/digest.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/dyn_digest.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/errors.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/fixed.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/variable.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/xof.rs
+
+/Users/aileen/pamm-a/pinocchio-prop-amm/bot/target/debug/deps/libdigest-1ae712a76512d53e.rmeta: /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/lib.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/digest.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/dyn_digest.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/errors.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/fixed.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/variable.rs /Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/xof.rs
+
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/lib.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/digest.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/dyn_digest.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/errors.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/fixed.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/variable.rs:
+/Users/aileen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/digest-0.9.0/src/xof.rs:
