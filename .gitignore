@@ -1,0 +1,19 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+*.js.map
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
