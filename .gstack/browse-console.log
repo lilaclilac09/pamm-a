@@ -1,0 +1,4 @@
+[2026-04-09T06:38:38.607Z] [debug] setting chain data {read: Proxy(Object), simulate: Proxy(Object), createEventFilter: Proxy(Object), getEvents: Proxy(Object), watchEvent: Proxy(Object)} undefined
+[2026-04-09T06:38:41.005Z] [error] Failed to load resource: net::ERR_CONNECTION_CLOSED
+[2026-04-09T06:39:23.974Z] [error] Failed to load resource: net::ERR_CONNECTION_CLOSED
+[2026-04-09T06:39:24.337Z] [error] Failed to load resource: net::ERR_CONNECTION_CLOSED
