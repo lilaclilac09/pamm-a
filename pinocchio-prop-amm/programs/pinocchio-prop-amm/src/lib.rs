@@ -2,7 +2,7 @@
 
 use pinocchio::{AccountView, Address, ProgramResult};
 use pinocchio::error::ProgramError;
-use pinocchio_token::instructions::Transfer;
+use pinocchio_token::instructions::{Burn, MintTo, Transfer};
 
 mod state;
 
@@ -151,6 +151,14 @@ fn swap(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     Ok(())
 }
 
+fn isqrt(n: u64) -> u64 {
+    if n == 0 { return 0; }
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+    while y < x { x = y; y = (x + n / x) / 2; }
+    x
+}
+
 fn add_liquidity(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     // Account layout:
     // 0 = pool        (writable)
@@ -158,20 +166,26 @@ fn add_liquidity(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     // 2 = vault_a     (writable) — pool's token A vault
     // 3 = user_b      (writable) — user's token B account
     // 4 = vault_b     (writable) — pool's token B vault
-    // 5 = user        (signer)
-    if accounts.len() < 6 {
+    // 5 = lp_mint     (writable) — LP token mint (authority = pool_auth)
+    // 6 = user_lp     (writable) — user's LP token account
+    // 7 = user        (signer)
+    // 8 = pool_auth   (signer)   — pool keypair, mint authority
+    if accounts.len() < 9 {
         return Err(ProgramError::NotEnoughAccountKeys);
     }
     if data.len() < 16 {
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let pool    = &accounts[0];
-    let user_a  = &accounts[1];
-    let vault_a = &accounts[2];
-    let user_b  = &accounts[3];
-    let vault_b = &accounts[4];
-    let user    = &accounts[5];
+    let pool      = &accounts[0];
+    let user_a    = &accounts[1];
+    let vault_a   = &accounts[2];
+    let user_b    = &accounts[3];
+    let vault_b   = &accounts[4];
+    let lp_mint   = &accounts[5];
+    let user_lp   = &accounts[6];
+    let user      = &accounts[7];
+    let pool_auth = &accounts[8];
 
     let amount_a: u64 = u64::from_le_bytes(data[0..8].try_into().unwrap());
     let amount_b: u64 = u64::from_le_bytes(data[8..16].try_into().unwrap());
@@ -180,14 +194,37 @@ fn add_liquidity(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    Transfer { from: user_a, to: vault_a, authority: user, amount: amount_a }.invoke()?;
-    Transfer { from: user_b, to: vault_b, authority: user, amount: amount_b }.invoke()?;
+    let (reserve_a, reserve_b, lp_supply) = {
+        let d = pool.try_borrow()?;
+        (
+            u64::from_le_bytes(d[8..16].try_into().unwrap()),
+            u64::from_le_bytes(d[16..24].try_into().unwrap()),
+            u64::from_le_bytes(d[24..32].try_into().unwrap()),
+        )
+    };
+
+    // LP minted: sqrt(a*b) on first deposit, proportional on subsequent
+    let lp_amount = if lp_supply == 0 {
+        isqrt(amount_a.saturating_mul(amount_b))
+    } else {
+        // min of proportional shares to enforce correct ratio
+        let share_a = (amount_a as u128 * lp_supply as u128 / reserve_a as u128) as u64;
+        let share_b = (amount_b as u128 * lp_supply as u128 / reserve_b as u128) as u64;
+        share_a.min(share_b)
+    };
+
+    if lp_amount == 0 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    Transfer { from: user_a, to: vault_a, authority: user,      amount: amount_a }.invoke()?;
+    Transfer { from: user_b, to: vault_b, authority: user,      amount: amount_b }.invoke()?;
+    MintTo   { mint: lp_mint, account: user_lp, mint_authority: pool_auth, amount: lp_amount }.invoke()?;
 
     let mut d = pool.try_borrow_mut()?;
-    let reserve_a = u64::from_le_bytes(d[8..16].try_into().unwrap());
-    let reserve_b = u64::from_le_bytes(d[16..24].try_into().unwrap());
     d[8..16].copy_from_slice(&(reserve_a + amount_a).to_le_bytes());
     d[16..24].copy_from_slice(&(reserve_b + amount_b).to_le_bytes());
+    d[24..32].copy_from_slice(&(lp_supply + lp_amount).to_le_bytes());
 
     Ok(())
 }
@@ -199,11 +236,14 @@ fn remove_liquidity(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     // 2 = user_a      (writable) — user's token A account
     // 3 = vault_b     (writable) — pool's token B vault
     // 4 = user_b      (writable) — user's token B account
-    // 5 = pool_auth   (signer)   — pool keypair authority
-    if accounts.len() < 6 {
+    // 5 = lp_mint     (writable) — LP token mint
+    // 6 = user_lp     (writable) — user's LP token account (burn from here)
+    // 7 = pool_auth   (signer)   — vault authority
+    // 8 = user        (signer)   — LP token authority
+    if accounts.len() < 9 {
         return Err(ProgramError::NotEnoughAccountKeys);
     }
-    if data.len() < 16 {
+    if data.len() < 8 {
         return Err(ProgramError::InvalidInstructionData);
     }
 
@@ -212,29 +252,41 @@ fn remove_liquidity(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     let user_a    = &accounts[2];
     let vault_b   = &accounts[3];
     let user_b    = &accounts[4];
-    let pool_auth = &accounts[5];
+    let lp_mint   = &accounts[5];
+    let user_lp   = &accounts[6];
+    let pool_auth = &accounts[7];
+    let user      = &accounts[8];
 
-    let amount_a: u64 = u64::from_le_bytes(data[0..8].try_into().unwrap());
-    let amount_b: u64 = u64::from_le_bytes(data[8..16].try_into().unwrap());
+    let lp_amount: u64 = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    if lp_amount == 0 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
 
-    let (reserve_a, reserve_b) = {
+    let (reserve_a, reserve_b, lp_supply) = {
         let d = pool.try_borrow()?;
         (
             u64::from_le_bytes(d[8..16].try_into().unwrap()),
             u64::from_le_bytes(d[16..24].try_into().unwrap()),
+            u64::from_le_bytes(d[24..32].try_into().unwrap()),
         )
     };
 
-    if amount_a > reserve_a || amount_b > reserve_b {
+    if lp_supply == 0 || lp_amount > lp_supply {
         return Err(ProgramError::InsufficientFunds);
     }
 
-    Transfer { from: vault_a, to: user_a, authority: pool_auth, amount: amount_a }.invoke()?;
-    Transfer { from: vault_b, to: user_b, authority: pool_auth, amount: amount_b }.invoke()?;
+    // Proportional withdrawal
+    let out_a = (lp_amount as u128 * reserve_a as u128 / lp_supply as u128) as u64;
+    let out_b = (lp_amount as u128 * reserve_b as u128 / lp_supply as u128) as u64;
+
+    Burn     { account: user_lp, mint: lp_mint, authority: user,      amount: lp_amount }.invoke()?;
+    Transfer { from: vault_a, to: user_a, authority: pool_auth, amount: out_a }.invoke()?;
+    Transfer { from: vault_b, to: user_b, authority: pool_auth, amount: out_b }.invoke()?;
 
     let mut d = pool.try_borrow_mut()?;
-    d[8..16].copy_from_slice(&(reserve_a - amount_a).to_le_bytes());
-    d[16..24].copy_from_slice(&(reserve_b - amount_b).to_le_bytes());
+    d[8..16].copy_from_slice(&(reserve_a - out_a).to_le_bytes());
+    d[16..24].copy_from_slice(&(reserve_b - out_b).to_le_bytes());
+    d[24..32].copy_from_slice(&(lp_supply - lp_amount).to_le_bytes());
 
     Ok(())
 }
