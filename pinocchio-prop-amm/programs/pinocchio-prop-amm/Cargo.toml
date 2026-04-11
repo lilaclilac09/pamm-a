@@ -17,6 +17,6 @@ solana-message = "3.0"
 solana-transaction = "3.0"
 solana-signer = "3.0"
 solana-address = "2.0"
+solana-account = "3.2"
 solana-pubkey = "2.4"
-solana-instruction = "2.3"
-solana-system-interface = "1.0"
+solana-system-interface = { version = "1.0", features = ["bincode"] }
