@@ -14,6 +14,8 @@ pinocchio::nostd_panic_handler!();
 const INIT_POOL: u8 = 0;
 const UPDATE_ORACLE: u8 = 1;
 const SWAP: u8 = 2;
+const ADD_LIQUIDITY: u8 = 3;
+const REMOVE_LIQUIDITY: u8 = 4;
 
 pub fn process_instruction(
     _program_id: &Address,
@@ -28,6 +30,8 @@ pub fn process_instruction(
         INIT_POOL => initialize_pool(accounts),
         UPDATE_ORACLE => update_oracle(accounts, &data[1..]),
         SWAP => swap(accounts, &data[1..]),
+        ADD_LIQUIDITY => add_liquidity(accounts, &data[1..]),
+        REMOVE_LIQUIDITY => remove_liquidity(accounts, &data[1..]),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -143,6 +147,94 @@ fn swap(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     let mut d = pool.try_borrow_mut()?;
     d[8..16].copy_from_slice(&(reserve_in + amount_in).to_le_bytes());
     d[16..24].copy_from_slice(&(reserve_out - final_out).to_le_bytes());
+
+    Ok(())
+}
+
+fn add_liquidity(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
+    // Account layout:
+    // 0 = pool        (writable)
+    // 1 = user_a      (writable) — user's token A account
+    // 2 = vault_a     (writable) — pool's token A vault
+    // 3 = user_b      (writable) — user's token B account
+    // 4 = vault_b     (writable) — pool's token B vault
+    // 5 = user        (signer)
+    if accounts.len() < 6 {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    }
+    if data.len() < 16 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let pool    = &accounts[0];
+    let user_a  = &accounts[1];
+    let vault_a = &accounts[2];
+    let user_b  = &accounts[3];
+    let vault_b = &accounts[4];
+    let user    = &accounts[5];
+
+    let amount_a: u64 = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    let amount_b: u64 = u64::from_le_bytes(data[8..16].try_into().unwrap());
+
+    if amount_a == 0 || amount_b == 0 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    Transfer { from: user_a, to: vault_a, authority: user, amount: amount_a }.invoke()?;
+    Transfer { from: user_b, to: vault_b, authority: user, amount: amount_b }.invoke()?;
+
+    let mut d = pool.try_borrow_mut()?;
+    let reserve_a = u64::from_le_bytes(d[8..16].try_into().unwrap());
+    let reserve_b = u64::from_le_bytes(d[16..24].try_into().unwrap());
+    d[8..16].copy_from_slice(&(reserve_a + amount_a).to_le_bytes());
+    d[16..24].copy_from_slice(&(reserve_b + amount_b).to_le_bytes());
+
+    Ok(())
+}
+
+fn remove_liquidity(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
+    // Account layout:
+    // 0 = pool        (writable)
+    // 1 = vault_a     (writable) — pool's token A vault
+    // 2 = user_a      (writable) — user's token A account
+    // 3 = vault_b     (writable) — pool's token B vault
+    // 4 = user_b      (writable) — user's token B account
+    // 5 = pool_auth   (signer)   — pool keypair authority
+    if accounts.len() < 6 {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    }
+    if data.len() < 16 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let pool      = &accounts[0];
+    let vault_a   = &accounts[1];
+    let user_a    = &accounts[2];
+    let vault_b   = &accounts[3];
+    let user_b    = &accounts[4];
+    let pool_auth = &accounts[5];
+
+    let amount_a: u64 = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    let amount_b: u64 = u64::from_le_bytes(data[8..16].try_into().unwrap());
+
+    let (reserve_a, reserve_b) = {
+        let d = pool.try_borrow()?;
+        (
+            u64::from_le_bytes(d[8..16].try_into().unwrap()),
+            u64::from_le_bytes(d[16..24].try_into().unwrap()),
+        )
+    };
+
+    if amount_a > reserve_a || amount_b > reserve_b {
+        return Err(ProgramError::InsufficientFunds);
+    }
+
+    Transfer { from: vault_a, to: user_a, authority: pool_auth, amount: amount_a }.invoke()?;
+    Transfer { from: vault_b, to: user_b, authority: pool_auth, amount: amount_b }.invoke()?;
+
+    let mut d = pool.try_borrow_mut()?;
+    d[8..16].copy_from_slice(&(reserve_a - amount_a).to_le_bytes());
+    d[16..24].copy_from_slice(&(reserve_b - amount_b).to_le_bytes());
 
     Ok(())
 }

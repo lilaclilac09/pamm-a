@@ -13,7 +13,8 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use std::{collections::VecDeque, str::FromStr};
+use solana_sdk::hash::Hash;
+use std::{collections::VecDeque, str::FromStr, time::Instant};
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
 
@@ -59,9 +60,9 @@ impl Config {
                 "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d".into()
             }),
             update_interval_secs: std::env::var("UPDATE_INTERVAL_SECS")
-                .unwrap_or_else(|_| "5".into())
+                .unwrap_or_else(|_| "1".into())
                 .parse()
-                .unwrap_or(5),
+                .unwrap_or(1),
             base_spread_bps: std::env::var("BASE_SPREAD_BPS")
                 .unwrap_or_else(|_| "10".into())
                 .parse()
@@ -106,6 +107,8 @@ struct HermesPrice {
 struct BotState {
     price_history: VecDeque<u64>, // 历史价格（scaled to 1e9）
     cycle_count: u64,
+    cached_blockhash: Option<Hash>,
+    blockhash_fetched_at: Option<Instant>,
 }
 
 impl BotState {
@@ -113,6 +116,16 @@ impl BotState {
         BotState {
             price_history: VecDeque::with_capacity(20),
             cycle_count: 0,
+            cached_blockhash: None,
+            blockhash_fetched_at: None,
+        }
+    }
+
+    // Refresh blockhash at most once every 20s (well within 150-slot expiry)
+    fn needs_blockhash_refresh(&self) -> bool {
+        match self.blockhash_fetched_at {
+            None => true,
+            Some(t) => t.elapsed().as_secs() >= 20,
         }
     }
 
@@ -219,10 +232,19 @@ async fn run_cycle(
         reserve_in, reserve_out, current_ratio_bps, skew_bonus
     );
 
-    // 7. 构建并发送 UPDATE_ORACLE 指令
+    // 7. 刷新 blockhash（每 20s 一次，复用缓存减少 RPC 调用）
+    if state.needs_blockhash_refresh() {
+        let bh = client.get_latest_blockhash().context("get_latest_blockhash failed")?;
+        state.cached_blockhash = Some(bh);
+        state.blockhash_fetched_at = Some(Instant::now());
+    }
+    let blockhash = state.cached_blockhash.unwrap();
+
+    // 8. 构建并发送 UPDATE_ORACLE 指令
     let sig = send_update_oracle(
         cfg,
         client,
+        blockhash,
         mid_price_scaled,
         adjusted_base_spread,
         vol_factor,
@@ -303,6 +325,7 @@ fn parse_reserves(pool_data: &[u8]) -> Result<(u64, u64)> {
 fn send_update_oracle(
     cfg: &Config,
     client: &RpcClient,
+    blockhash: Hash,
     mid_price: u64,
     base_spread: u32,
     vol_factor: u32,
@@ -330,17 +353,14 @@ fn send_update_oracle(
         data,
     };
 
-    let blockhash = client
-        .get_latest_blockhash()
-        .context("get_latest_blockhash failed")?;
-
     let msg = Message::new(&[ix], Some(&cfg.wallet.pubkey()));
     let mut tx = Transaction::new_unsigned(msg);
     tx.sign(&[&cfg.wallet], blockhash);
 
+    // Fire-and-forget: don't wait for confirmation so 1s loop isn't blocked
     let sig = client
-        .send_and_confirm_transaction(&tx)
-        .context("send_and_confirm_transaction failed")?;
+        .send_transaction(&tx)
+        .context("send_transaction failed")?;
 
     Ok(sig.to_string())
 }
