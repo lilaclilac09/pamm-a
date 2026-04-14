@@ -16,11 +16,23 @@ const MAX_SPREAD = parseFloat(process.env.MAX_SPREAD!);
 const MAX_SINGLE_TRADE_SOL = parseFloat(process.env.MAX_SINGLE_TRADE_SOL!);
 const MAX_DAILY_LOSS = parseFloat(process.env.MAX_DAILY_LOSS!);
 const JITO_TIP = parseFloat(process.env.JITO_TIP!) * LAMPORTS_PER_SOL;
+const JITO_TIP_ACCOUNT = new PublicKey(
+    process.env.JITO_TIP_ACCOUNT ?? '96gYZGLnJYVFmbjzopPSU6QiEV5fG3u3Z4M7o7G1z5b'
+);
+
+// Pool account to read real AMM depth (optional — falls back to 0 if unset)
+const AMM_POOL_PUBKEY = process.env.AMM_POOL_PUBKEY
+    ? new PublicKey(process.env.AMM_POOL_PUBKEY)
+    : null;
+// Byte offset of reserve_a in the 304-byte pool layout
+const OFF_RESERVE_A = 48;
 
 let inventoryMap = new Map<string, number>();
 let dailyPnL = 0;
 let lastTotalBalance = 0;
 let cycleCount = 0;
+let consecutiveFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = parseInt(process.env.MAX_CONSECUTIVE_FAILURES ?? '5');
 let botStartTime = Date.now();
 const tradeLog: { ts: number; token: string; side: string; price: number; amount: number }[] = [];
 
@@ -127,11 +139,12 @@ async function processToken(tokenMint: PublicKey) {
     const midPrice = await getMidPrice(tokenMint);
     const volatility = await getPythVolatility(tokenMint);
 
-    // 更新轻量 Order Book
+    // Update lightweight order book — depth from on-chain AMM reserves (SOL units)
+    const ammDepth = await getAmmDepth();
     orderBook.set(tokenMint.toBase58(), {
         bid: midPrice * 0.999,
         ask: midPrice * 1.001,
-        depth: Math.random() * 100 + 20   // 模拟深度，实际可接 Jupiter Depth
+        depth: ammDepth,
     });
 
     const spread = calculateDynamicSpread(inventory, volatility, tokenMint);
@@ -145,6 +158,20 @@ async function processToken(tokenMint: PublicKey) {
 
     if (inventory < MAX_INVENTORY * 0.72) await executeTrade(tokenMint, true, bidPrice, maxTrade);
     if (inventory > MAX_INVENTORY * 0.38) await executeTrade(tokenMint, false, askPrice, maxTrade);
+}
+
+// ==================== AMM depth from on-chain reserves ====================
+async function getAmmDepth(): Promise<number> {
+    if (!AMM_POOL_PUBKEY) return 0;
+    try {
+        const info = await connection.getAccountInfo(AMM_POOL_PUBKEY);
+        if (!info || info.data.length < OFF_RESERVE_A + 8) return 0;
+        // reserve_a is at OFF_RESERVE_A (48), stored as u64 little-endian
+        const reserveA = Number(info.data.readBigUInt64LE(OFF_RESERVE_A));
+        return reserveA / LAMPORTS_PER_SOL; // convert lamports → SOL
+    } catch {
+        return 0;
+    }
 }
 
 // ==================== 动态 Spread（结合 Order Book 深度） ====================
@@ -225,7 +252,6 @@ async function executeTrade(tokenMint: PublicKey, isBuy: boolean, price: number,
         const swapTx = VersionedTransaction.deserialize(Buffer.from(swapTransaction, 'base64'));
 
         // 3. Jito tip 交易
-        const JITO_TIP_ACCOUNT = new PublicKey('96gYZGLnJYVFmbjzopPSU6QiEV5fG3u3Z4M7o7G1z5b');
         const { blockhash } = await connection.getLatestBlockhash();
         const tipTx = new VersionedTransaction(
             new TransactionMessage({
@@ -263,9 +289,15 @@ async function executeTrade(tokenMint: PublicKey, isBuy: boolean, price: number,
         tradeLog.push(entry);
         if (tradeLog.length > 500) tradeLog.shift();
         tradeEmitter.emit('trade', entry);
+        consecutiveFailures = 0; // reset on success
         console.log(`✅ [${tokenMint.toBase58().slice(0,6)}] ${isBuy ? 'buy' : 'sell'} ${maxAmount.toFixed(4)} SOL @ ${price.toFixed(8)}`);
     } catch (err: any) {
-        console.error(`❌ executeTrade 失败:`, err.message);
+        consecutiveFailures++;
+        console.error(`❌ executeTrade 失败 (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, err.message);
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            console.error(`🚨 circuit breaker: ${consecutiveFailures} consecutive failures — halting bot`);
+            process.exit(1);
+        }
     }
 }
 
