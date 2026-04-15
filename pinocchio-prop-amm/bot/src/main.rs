@@ -17,6 +17,7 @@ mod trading_arm;
 
 use anyhow::{Context, Result};
 use solana_client::rpc_client::RpcClient;
+use solana_sdk::signature::Signer;
 use std::sync::Arc;
 use tracing::info;
 
@@ -30,7 +31,7 @@ async fn main() -> Result<()> {
     // Seed daily-PnL tracking with current balance
     let client = RpcClient::new(cfg.rpc_url.clone());
     let start_lamports = client
-        .get_balance(&cfg.wallet.try_pubkey()?)
+        .get_balance(&cfg.wallet.pubkey())
         .context("initial balance fetch")?;
 
     let state = risk::SharedState::new(start_lamports);

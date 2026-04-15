@@ -203,7 +203,7 @@ async fn run_cycle(
     let swap_tx_b64 = jupiter_swap_tx(http, trade_quote, &cfg.wallet.pubkey().to_string())
         .await.context("jupiter swap tx")?;
 
-    let sig = submit_jito_bundle(cfg, client, &http, blockhash, &swap_tx_b64).await?;
+    let sig = submit_jito_bundle(cfg, &http, blockhash, &swap_tx_b64).await?;
     Ok(format!("jupiter_swap: sig={} dir={}/{}", sig, in_mint, out_mint))
 }
 
@@ -313,7 +313,6 @@ fn sign_versioned_tx(
 
 async fn submit_jito_bundle(
     cfg:       &Config,
-    client:    &RpcClient,
     http:      &reqwest::Client,
     blockhash: Hash,
     swap_b64:  &str,

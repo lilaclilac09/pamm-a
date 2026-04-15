@@ -23,7 +23,7 @@ use tracing::{error, info};
 use crate::{
     config::Config,
     pyth::{fetch_pyth_price, PriceHistory},
-    risk::{PoolSnapshot, SharedState, POOL_SIZE},
+    risk::{PoolSnapshot, SharedState},
 };
 
 // ── Blockhash cache ───────────────────────────────────────────────────────────
