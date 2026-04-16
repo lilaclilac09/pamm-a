@@ -25,6 +25,7 @@ use tracing::{info, warn, error};
 
 use crate::{
     config::Config,
+    cu_budget::send_budgeted,
     risk::{is_price_sane, SharedState},
 };
 
@@ -71,9 +72,41 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
             Ok(action) => {
                 info!("[trade #{}] {}", cycle, action);
                 state.trade_failures.store(0, std::sync::atomic::Ordering::Relaxed);
-                let mut m = state.metrics.write().await;
-                m.trade_cycles = cycle;
-                m.trade_errors = 0;
+
+                // ── Daily PnL circuit breaker ─────────────────────────────────
+                let wallet_pubkey = cfg.wallet.pubkey();
+                let rpc_url       = cfg.rpc_url.clone();
+                if let Some(current_lamports) = tokio::task::spawn_blocking(move || {
+                    RpcClient::new(rpc_url).get_balance(&wallet_pubkey)
+                }).await.ok().and_then(|r| r.ok()) {
+                    let start = state.start_balance_lamports
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let daily_pnl_pct = if start > 0 {
+                        (current_lamports as f64 - start as f64) / start as f64
+                    } else {
+                        0.0
+                    };
+
+                    let mut m = state.metrics.write().await;
+                    m.trade_cycles  = cycle;
+                    m.trade_errors  = 0;
+                    m.daily_pnl_pct = daily_pnl_pct;
+
+                    // Loss is a negative pnl; compare magnitude to the limit
+                    if daily_pnl_pct < -(cfg.max_daily_loss_pct) {
+                        state.halt(&format!(
+                            "daily loss limit hit: {:.2}% (limit {:.2}%)",
+                            daily_pnl_pct * 100.0,
+                            cfg.max_daily_loss_pct * 100.0,
+                        ));
+                        return;
+                    }
+                } else {
+                    // Balance fetch failed — still update cycle/error metrics
+                    let mut m = state.metrics.write().await;
+                    m.trade_cycles = cycle;
+                    m.trade_errors = 0;
+                }
             }
             Err(e) => {
                 let failures = state.trade_failures
@@ -168,6 +201,7 @@ async fn run_cycle(
         if lp_to_burn > 0 {
             info!("rebalancing: remove {} LP (inv_ratio={:.3})", lp_to_burn, inv_ratio);
             send_remove_liquidity(cfg, client, blockhash, lp_to_burn, 0, 0)?;
+            state.mm_book.write().await.record_rebalance();
             return Ok(format!("remove_liquidity: burned {} LP", lp_to_burn));
         }
     } else if inv_ratio < cfg.rebalance_low {
@@ -180,8 +214,8 @@ async fn run_cycle(
         if bal_a >= amount_a && bal_b >= amount_b {
             info!("rebalancing: add liquidity {}A + {}B (inv_ratio={:.3})",
                 amount_a, amount_b, inv_ratio);
-            // min_lp_out = 0 for now; TODO: derive from expected amounts
             send_add_liquidity(cfg, client, blockhash, amount_a, amount_b, 0)?;
+            state.mm_book.write().await.record_rebalance();
             return Ok(format!("add_liquidity: {}A + {}B", amount_a, amount_b));
         } else {
             // Fall through to Jupiter swap to acquire needed tokens
@@ -192,7 +226,8 @@ async fn run_cycle(
 
     // ── 5. Active Jupiter swap (spread capture) ───────────────────────────────
     // Direction: sell A for B if overweight, buy A with B if underweight
-    let (in_mint, out_mint, amount) = if inv_ratio > 0.5 {
+    let a_to_b = inv_ratio > 0.5;
+    let (in_mint, out_mint, amount) = if a_to_b {
         (mint_a.clone(), mint_b.clone(), cfg.max_trade_lamports)
     } else {
         (mint_b.clone(), mint_a.clone(), cfg.max_trade_lamports)
@@ -200,11 +235,33 @@ async fn run_cycle(
 
     let trade_quote = jupiter_quote(http, &in_mint, &out_mint, amount, cfg.slippage_bps)
         .await.context("jupiter trade quote")?;
+
+    // Extract amounts from quote before moving it into swap_tx call
+    let in_amount: u64 = trade_quote["inAmount"]
+        .as_str().and_then(|s| s.parse().ok()).unwrap_or(amount);
+    let out_amount: u64 = trade_quote["outAmount"]
+        .as_str().and_then(|s| s.parse().ok()).unwrap_or(0);
+
     let swap_tx_b64 = jupiter_swap_tx(http, trade_quote, &cfg.wallet.pubkey().to_string())
         .await.context("jupiter swap tx")?;
 
     let sig = submit_jito_bundle(cfg, &http, blockhash, &swap_tx_b64).await?;
-    Ok(format!("jupiter_swap: sig={} dir={}/{}", sig, in_mint, out_mint))
+
+    // Record this swap in the MM book
+    {
+        let oracle_price = snap.oracle_price;
+        let mut mm = state.mm_book.write().await;
+        mm.record_swap(a_to_b, in_amount, out_amount, oracle_price, cfg.jito_tip_lamports);
+    }
+
+    Ok(format!(
+        "jupiter_swap: sig={} dir={} in={} out={} slippage={}bps",
+        sig,
+        if a_to_b { "A→B" } else { "B→A" },
+        in_amount,
+        out_amount,
+        state.mm_book.read().await.last_slippage_bps,
+    ))
 }
 
 // ── LP burn estimate ──────────────────────────────────────────────────────────
@@ -391,10 +448,9 @@ fn send_add_liquidity(
         data,
     };
 
-    let mut tx = Transaction::new_unsigned(Message::new(&[ix], Some(&cfg.wallet.pubkey())));
-    tx.sign(&[&cfg.wallet], blockhash);
-    let sig = client.send_transaction(&tx).context("ADD_LIQUIDITY send")?;
-    Ok(sig.to_string())
+    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash)
+        .context("ADD_LIQUIDITY send_budgeted")?;
+    Ok(sig)
 }
 
 // ── REMOVE_LIQUIDITY instruction ───────────────────────────────────────────────
@@ -433,8 +489,7 @@ fn send_remove_liquidity(
         data,
     };
 
-    let mut tx = Transaction::new_unsigned(Message::new(&[ix], Some(&cfg.wallet.pubkey())));
-    tx.sign(&[&cfg.wallet], blockhash);
-    let sig = client.send_transaction(&tx).context("REMOVE_LIQUIDITY send")?;
-    Ok(sig.to_string())
+    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash)
+        .context("REMOVE_LIQUIDITY send_budgeted")?;
+    Ok(sig)
 }

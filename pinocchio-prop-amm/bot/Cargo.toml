@@ -7,6 +7,10 @@ edition = "2021"
 name = "oracle-bot"
 path = "src/main.rs"
 
+[[bin]]
+name = "sim"
+path = "src/bin/sim.rs"
+
 [dependencies]
 solana-sdk    = "1.18"
 solana-client = "1.18"
@@ -16,6 +20,8 @@ bs58    = "0.5"
 serde   = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
 anyhow  = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"

@@ -1,0 +1,26 @@
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+bot/.env
+scripts/pool-keypair.json
+scripts/pool-state.json
+
+# ── Rust build artifacts ──────────────────────────────────────────────────────
+target/
+**/*.rs.bk
+
+# ── Solana program artifacts ──────────────────────────────────────────────────
+# Keep the .so in git so litesvm tests don't require a full cargo build-sbf.
+# Remove this line if you want to force a fresh build every time.
+# programs/pinocchio-prop-amm/target/deploy/*.so
+
+# ── Node / scripts ────────────────────────────────────────────────────────────
+scripts/node_modules/
+scripts/.env
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

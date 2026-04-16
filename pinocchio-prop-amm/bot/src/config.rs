@@ -30,6 +30,12 @@ pub struct Config {
     pub k_param:           u32,
     pub fee_bps:           u32,
     pub max_vol_factor:    u32,
+    /// Skip UPDATE_ORACLE if price moved less than this many bps since last send.
+    /// 0 = always update. Default: 5 (0.05%). Cuts oracle tx count ~90% in calm markets.
+    pub min_oracle_update_bps: u32,
+    /// Force UPDATE_ORACLE even if price is stable, after this many seconds.
+    /// Keeps the on-chain TWAP fresh. Default: 30s.
+    pub max_oracle_silence_secs: u64,
 
     // ── Trading arm ──────────────────────────────────────────────────────
     pub trade_interval_ms:       u64,
@@ -112,11 +118,19 @@ impl Config {
             pyth_feed_id: std::env::var("PYTH_FEED_ID").unwrap_or_else(|_| {
                 "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d".into()
             }),
-            update_interval_ms: u("UPDATE_INTERVAL_MS", 1_000),
-            base_spread_bps:    u("BASE_SPREAD_BPS", 10) as u32,
-            k_param:            u("K_PARAM", 1_000) as u32,
-            fee_bps:            u("FEE_BPS", 5) as u32,
-            max_vol_factor:     u("MAX_VOL_FACTOR", 200) as u32,
+            update_interval_ms: u("UPDATE_INTERVAL_MS", 500),
+            // BASE_SPREAD_BPS=0: spread = vol_adj only (= Pyth confidence + EWMA vol).
+            // In calm SOL market this gives ~1-3bps effective spread.
+            // Fee is separate and goes directly to LPs.
+            base_spread_bps:    u("BASE_SPREAD_BPS", 0) as u32,
+            k_param:            u("K_PARAM", 500) as u32,
+            // 2bp fee: competitive with Uniswap v3 1bp tier but with oracle protection.
+            fee_bps:            u("FEE_BPS", 2) as u32,
+            max_vol_factor:          u("MAX_VOL_FACTOR", 200) as u32,
+            // Update oracle on any 1bp move so the pool is always priced fresh.
+            min_oracle_update_bps:   u("MIN_ORACLE_UPDATE_BPS", 1) as u32,
+            // 10s TWAP freshness guarantee for trading arm.
+            max_oracle_silence_secs: u("MAX_ORACLE_SILENCE_SECS", 10),
 
             trade_interval_ms:   u("TRADE_INTERVAL_MS", 5_000),
             max_trade_lamports:  u("MAX_TRADE_LAMPORTS", 100_000_000), // 0.1 SOL
