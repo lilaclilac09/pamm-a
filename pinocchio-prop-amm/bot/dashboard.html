@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMM Bot Dashboard</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0f14;
+    --bg2: #13161e;
+    --bg3: #1a1e2a;
+    --border: #252836;
+    --accent: #5b8af5;
+    --green: #26a69a;
+    --red: #ef5350;
+    --yellow: #f5a623;
+    --text: #e0e4f0;
+    --muted: #606880;
+    --font: 'SF Mono', 'Fira Code', monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; overflow-x: hidden; }
+
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px; background: var(--bg2); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .top-bar .title { font-size: 14px; font-weight: 600; letter-spacing: 1px; color: #fff; }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px; padding: 4px 12px;
+    border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    border: 1px solid var(--border);
+  }
+  .status-pill.running { background: rgba(38,166,154,0.15); color: var(--green); border-color: var(--green); }
+  .status-pill.halted  { background: rgba(239,83,80,0.15);  color: var(--red);   border-color: var(--red); }
+  .status-pill.offline { background: rgba(96,104,128,0.15); color: var(--muted); border-color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .span2 { grid-column: span 2; }
+  .span3 { grid-column: span 3; }
+
+  .chart-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .chart-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px 8px; border-bottom: 1px solid var(--border);
+  }
+  .chart-header .ctitle { font-size: 12px; font-weight: 600; }
+  .badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 4px;
+    background: rgba(91,138,245,0.15); color: var(--accent); border: 1px solid rgba(91,138,245,0.3);
+  }
+  .badge.green { background: rgba(38,166,154,0.15); color: var(--green); border-color: rgba(38,166,154,0.3); }
+  #price-chart { height: 220px; }
+  #swap-chart  { height: 150px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .kpi { text-align: center; padding: 10px 8px; background: var(--bg3); border-radius: 8px; border: 1px solid var(--border); }
+  .kpi .k-val { font-size: 17px; font-weight: 700; color: #fff; }
+  .kpi .k-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 3px; }
+
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; padding: 4px 0 0; }
+  #inv-gauge { width: 100%; max-width: 200px; }
+  .gauge-label { font-size: 22px; font-weight: 700; color: #fff; margin-top: 0; }
+  .gauge-sub   { font-size: 10px; color: var(--muted); }
+
+  .spread-needle-wrap { position: relative; height: 10px; margin-top: 10px; }
+  .spread-track {
+    height: 6px; border-radius: 3px; overflow: hidden;
+    background: linear-gradient(90deg, var(--green) 0%, var(--yellow) 40%, var(--red) 100%);
+    opacity: 0.4;
+    margin-top: 2px;
+  }
+  .spread-needle {
+    position: absolute; top: 0; width: 2px; height: 10px;
+    background: #fff; border-radius: 1px; transform: translateX(-50%);
+    transition: left 0.5s ease;
+    box-shadow: 0 0 6px rgba(255,255,255,0.7);
+  }
+
+  .reserve-bars { display: flex; gap: 16px; align-items: flex-end; height: 70px; margin-top: 8px; }
+  .rbar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .rbar-outer { width: 100%; background: var(--bg3); border-radius: 4px; height: 52px; position: relative; overflow: hidden; border: 1px solid var(--border); }
+  .rbar-inner { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 3px 3px 0 0; transition: height 0.6s ease; }
+  .bar-a { background: linear-gradient(180deg, var(--accent) 0%, rgba(91,138,245,0.3) 100%); }
+  .bar-b { background: linear-gradient(180deg, var(--green) 0%, rgba(38,166,154,0.3) 100%); }
+  .rbar-lbl { font-size: 10px; color: var(--muted); }
+  .rbar-val { font-size: 10px; color: var(--text); white-space: nowrap; }
+
+  .feed-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .feed-header { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  #tx-feed { height: 220px; overflow-y: auto; list-style: none; }
+  #tx-feed::-webkit-scrollbar { width: 3px; }
+  #tx-feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .fi {
+    display: grid; grid-template-columns: 56px 72px 1fr auto;
+    gap: 8px; align-items: center;
+    padding: 6px 16px; border-bottom: 1px solid rgba(37,40,54,0.4);
+    font-size: 11px; animation: fi-in 0.25s ease;
+  }
+  @keyframes fi-in { from{opacity:0;transform:translateY(-3px)} to{opacity:1;transform:none} }
+  .fi:hover { background: var(--bg3); }
+  .ft { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 5px; border-radius: 3px; text-align: center; }
+  .ft-oracle { background: rgba(91,138,245,0.2);  color: var(--accent); }
+  .ft-atob   { background: rgba(38,166,154,0.2);  color: var(--green); }
+  .ft-btoa   { background: rgba(245,166,35,0.2);  color: var(--yellow); }
+  .ft-err    { background: rgba(239,83,80,0.2);   color: var(--red); }
+  .fa { color: var(--muted); font-size: 10px; }
+  .fd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .fv { color: var(--muted); font-size: 10px; text-align: right; white-space: nowrap; }
+
+  #conn-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin-right: 5px; vertical-align: middle; transition: background 0.3s; }
+  #conn-dot.live { background: var(--green); }
+
+  @media(max-width:900px){
+    .grid { grid-template-columns: 1fr 1fr; }
+    .kpi-row { grid-template-columns: repeat(3,1fr); }
+    .span3,.span2{grid-column:span 2}
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="title">◆ PMM BOT &nbsp;<span style="color:var(--muted);font-size:11px;font-weight:400">devnet</span></div>
+  <div style="display:flex;gap:14px;align-items:center;">
+    <span style="font-size:11px;color:var(--muted)"><span id="conn-dot"></span><span id="conn-label">connecting…</span></span>
+    <div id="status-pill" class="status-pill offline"><div class="dot"></div><span id="status-text">offline</span></div>
+  </div>
+  <div style="font-size:11px;color:var(--muted)">
+    up <span id="uptime">—</span> &nbsp;·&nbsp; oracle <span id="oracle-age">—</span>s
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- KPIs -->
+  <div class="span3">
+    <div class="kpi-row">
+      <div class="kpi"><div class="k-val" id="kpi-price">—</div><div class="k-lbl">Price USD</div></div>
+      <div class="kpi"><div class="k-val" id="kpi-spread">—</div><div class="k-lbl">Spread bps</div></div>
+      <div class="kpi"><div class="k-val" id="kpi-swaps">—</div><div class="k-lbl">Swaps</div></div>
+      <div class="kpi"><div class="k-val" id="kpi-vol">—</div><div class="k-lbl">Volume</div></div>
+      <div class="kpi"><div class="k-val" id="kpi-ocycles">—</div><div class="k-lbl">Oracle Cycles</div></div>
+      <div class="kpi"><div class="k-val" id="kpi-fees">—</div><div class="k-lbl">Fee Collected</div></div>
+    </div>
+  </div>
+
+  <!-- Price chart -->
+  <div class="chart-card span2">
+    <div class="chart-header">
+      <span class="ctitle">Oracle Price + Bid/Ask Bands</span>
+      <span class="badge" id="price-badge">● LIVE</span>
+    </div>
+    <div id="price-chart"></div>
+  </div>
+
+  <!-- Right column: gauge + spread + reserves -->
+  <div class="card" style="display:flex;flex-direction:column;gap:16px;">
+    <div>
+      <div class="label">Inventory Ratio (A / Total Value)</div>
+      <div class="gauge-wrap">
+        <canvas id="inv-gauge" width="400" height="220"></canvas>
+        <div class="gauge-label"><span id="inv-pct">50.0</span>%</div>
+        <div class="gauge-sub">A-heavy ←→ B-heavy</div>
+      </div>
+    </div>
+    <div>
+      <div class="label">Effective Spread</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+        <span style="font-size:20px;font-weight:700;color:#fff" id="spread-val">— bps</span>
+        <span style="font-size:10px;color:var(--muted)">max 2000</span>
+      </div>
+      <div class="spread-needle-wrap">
+        <div class="spread-needle" id="spread-needle" style="left:0%"></div>
+        <div class="spread-track"></div>
+      </div>
+    </div>
+    <div>
+      <div class="label">Pool Reserves</div>
+      <div class="reserve-bars">
+        <div class="rbar-wrap">
+          <div class="rbar-outer"><div class="rbar-inner bar-a" id="bar-a" style="height:0%"></div></div>
+          <div class="rbar-lbl">Token A</div>
+          <div class="rbar-val" id="bar-a-val">—</div>
+        </div>
+        <div class="rbar-wrap">
+          <div class="rbar-outer"><div class="rbar-inner bar-b" id="bar-b" style="height:0%"></div></div>
+          <div class="rbar-lbl">Token B</div>
+          <div class="rbar-val" id="bar-b-val">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Swap volume chart -->
+  <div class="chart-card span2">
+    <div class="chart-header">
+      <span class="ctitle">Cumulative Swap Volume</span>
+      <span class="badge green" id="swap-badge">0 swaps</span>
+    </div>
+    <div id="swap-chart"></div>
+  </div>
+
+  <!-- Live feed -->
+  <div class="feed-card span3">
+    <div class="feed-header">
+      <span>Live Activity Feed</span>
+      <span style="font-size:10px;color:var(--muted)" id="feed-count">0 events</span>
+    </div>
+    <ul id="tx-feed"></ul>
+  </div>
+
+  <!-- PMM reference -->
+  <div class="card span3" style="font-size:11px;color:var(--muted);line-height:2;">
+    <div class="label" style="margin-bottom:6px;">PMM Formula</div>
+    <span style="color:var(--text)">eff = base + vol_adj</span> &nbsp;·&nbsp;
+    <span style="color:var(--text)">skew = (dev²/8000).min(eff)</span> &nbsp;·&nbsp;
+    <span style="color:var(--text)">ask = eff + skew &nbsp; bid = eff − skew</span> &nbsp;·&nbsp;
+    <span style="color:var(--accent)">A→B: out = in × 1e9 / (P × (1+ask))</span> &nbsp;·&nbsp;
+    <span style="color:var(--yellow)">B→A: out = in × P × (1−bid) / 1e9</span>
+  </div>
+
+</div>
+
+<script>
+// ── Charts ────────────────────────────────────────────────────────────────────
+
+function makeChart(id, h) {
+  const el = document.getElementById(id);
+  const c = LightweightCharts.createChart(el, {
+    width: el.clientWidth, height: h,
+    layout: { background: { color: '#13161e' }, textColor: '#606880' },
+    grid: { vertLines: { color: '#1a1e2a' }, horzLines: { color: '#1a1e2a' } },
+    rightPriceScale: { borderColor: '#252836' },
+    timeScale: { borderColor: '#252836', timeVisible: true, secondsVisible: true },
+    crosshair: { mode: 1 },
+  });
+  new ResizeObserver(() => c.resize(el.clientWidth, h)).observe(el);
+  return c;
+}
+
+const pc = makeChart('price-chart', 220);
+const sc = makeChart('swap-chart',  150);
+
+const priceLine = pc.addLineSeries({ color: '#5b8af5', lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
+const askLine   = pc.addLineSeries({ color: 'rgba(239,83,80,0.5)',   lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+const bidLine   = pc.addLineSeries({ color: 'rgba(38,166,154,0.5)',  lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+const volLine   = sc.addAreaSeries({ topColor: 'rgba(245,166,35,0.3)', bottomColor: 'rgba(245,166,35,0.02)', lineColor: '#f5a623', lineWidth: 2 });
+
+// ── Gauge ─────────────────────────────────────────────────────────────────────
+
+const gc = document.getElementById('inv-gauge');
+const gx = gc.getContext('2d');
+
+function drawGauge(ratio) {
+  const w = gc.width, h = gc.height;
+  gx.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h * 0.88, r = h * 0.72;
+
+  // Arc track
+  const g = gx.createLinearGradient(cx - r, 0, cx + r, 0);
+  g.addColorStop(0,    '#26a69a');
+  g.addColorStop(0.45, '#5b8af5');
+  g.addColorStop(1,    '#ef5350');
+  gx.beginPath();
+  gx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
+  gx.strokeStyle = g;
+  gx.lineWidth = 16;
+  gx.lineCap = 'round';
+  gx.stroke();
+
+  // Needle
+  const angle = Math.PI + ratio * Math.PI;
+  gx.beginPath();
+  gx.moveTo(cx, cy);
+  gx.lineTo(cx + (r - 8) * Math.cos(angle), cy + (r - 8) * Math.sin(angle));
+  gx.strokeStyle = '#ffffff';
+  gx.lineWidth = 3;
+  gx.lineCap = 'round';
+  gx.stroke();
+  gx.beginPath();
+  gx.arc(cx, cy, 6, 0, 2 * Math.PI);
+  gx.fillStyle = '#ffffff';
+  gx.fill();
+
+  // Labels
+  gx.font = 'bold 16px SF Mono, monospace';
+  gx.fillStyle = '#26a69a';
+  gx.textAlign = 'left';
+  gx.fillText('A', cx - r + 2, cy + 22);
+  gx.fillStyle = '#ef5350';
+  gx.textAlign = 'right';
+  gx.fillText('B', cx + r - 2, cy + 22);
+
+  // Tick marks at 25% / 50% / 75%
+  [0.25, 0.5, 0.75].forEach(p => {
+    const a = Math.PI + p * Math.PI;
+    const x1 = cx + (r - 20) * Math.cos(a), y1 = cy + (r - 20) * Math.sin(a);
+    const x2 = cx + (r - 6)  * Math.cos(a), y2 = cy + (r - 6)  * Math.sin(a);
+    gx.beginPath();
+    gx.moveTo(x1, y1); gx.lineTo(x2, y2);
+    gx.strokeStyle = 'rgba(255,255,255,0.25)';
+    gx.lineWidth = 1.5;
+    gx.stroke();
+  });
+}
+
+drawGauge(0.5);
+
+// ── Feed ──────────────────────────────────────────────────────────────────────
+
+let feedItems = [], feedTotal = 0;
+const MAX_FEED = 80;
+
+function pushFeed(type, desc, val) {
+  const ts = new Date().toLocaleTimeString('en-US', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  feedItems.unshift({ type, desc, val, ts });
+  if (feedItems.length > MAX_FEED) feedItems.pop();
+  feedTotal++;
+  document.getElementById('feed-count').textContent = feedTotal + ' events';
+  renderFeed();
+}
+
+function renderFeed() {
+  document.getElementById('tx-feed').innerHTML = feedItems.map(it => `
+    <li class="fi">
+      <span class="ft ft-${it.type}">${it.type === 'atob' ? 'A→B' : it.type === 'btoa' ? 'B→A' : it.type.toUpperCase()}</span>
+      <span class="fa">${it.ts}</span>
+      <span class="fd">${it.desc}</span>
+      <span class="fv">${it.val}</span>
+    </li>`).join('');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtBig(n) {
+  if (n == null || isNaN(n)) return '—';
+  n = Number(n);
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toFixed(0);
+}
+function fmtUp(s) {
+  if (!s) return '—';
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let prev = { oc: 0, swaps: 0 };
+let lastData = null;
+let initRA = 0, initRB = 0;
+
+function applySnapshot(d) {
+  lastData = d;
+  const now = Math.floor(Date.now() / 1000);
+
+  // Status
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill ' + (d.halted ? 'halted' : 'running');
+  document.getElementById('status-text').textContent = d.halted ? 'HALTED' : 'RUNNING';
+  document.getElementById('uptime').textContent = fmtUp(d.uptime_s);
+
+  const age = d.oracle?.last_update_age_s ?? -1;
+  document.getElementById('oracle-age').textContent = age >= 0 ? age : '—';
+
+  // Oracle price (convert from 1e9 scale)
+  const price = d.oracle?.price ?? 0;
+  const priceUsd = price / 1e9;
+  document.getElementById('kpi-price').textContent = priceUsd > 0 ? priceUsd.toFixed(2) : '—';
+
+  // Spread
+  const spread = d.oracle?.spread_bps ?? 0;
+  document.getElementById('kpi-spread').textContent = spread || '—';
+  document.getElementById('spread-val').textContent = (spread || '—') + ' bps';
+  document.getElementById('spread-needle').style.left = (Math.min(spread / 2000, 1) * 100) + '%';
+
+  // Oracle cycles → feed + chart
+  const oc = d.oracle?.cycles ?? 0;
+  if (oc > prev.oc && price > 0) {
+    priceLine.update({ time: now, value: priceUsd });
+    const sf = spread / 20000; // fraction of price
+    askLine.update({ time: now, value: priceUsd * (1 + sf) });
+    bidLine.update({ time: now, value: priceUsd * (1 - sf) });
+    if (oc % 5 === 0) { // throttle feed to every 5 oracle cycles
+      pushFeed('oracle', `$${priceUsd.toFixed(4)}  spread ${spread}bps`, `#${oc}`);
+    }
+  }
+  document.getElementById('kpi-ocycles').textContent = oc;
+  prev.oc = oc;
+
+  // Swaps
+  const swaps = d.trading?.total_swaps ?? 0;
+  document.getElementById('kpi-swaps').textContent = swaps;
+  document.getElementById('swap-badge').textContent = swaps + ' swaps';
+  if (swaps > prev.swaps) {
+    const ls = d.trading?.last_swap ?? {};
+    const inA = ls.in_amount > 0;
+    // direction guessed from amounts (A→B: in big out small due to oracle price scale)
+    const type = inA ? 'atob' : 'btoa';
+    const slip = ls.slippage_bps ?? 0;
+    pushFeed(type,
+      `in=${fmtBig(ls.in_amount)} → out=${fmtBig(ls.out_amount)}`,
+      `${Math.abs(slip)}bps spread`);
+    prev.swaps = swaps;
+  }
+
+  // Volume
+  const vol = d.trading?.volume_b ?? 0;
+  document.getElementById('kpi-vol').textContent = fmtBig(vol);
+  if (vol > 0) volLine.update({ time: now, value: vol });
+
+  // Fees
+  const feeA = d.pool?.fee_a ?? 0;
+  const feeB = d.pool?.fee_b ?? 0;
+  document.getElementById('kpi-fees').textContent = fmtBig(feeA + feeB);
+
+  // Inventory ratio
+  const inv = d.trading?.inventory_ratio ?? 0.5;
+  document.getElementById('inv-pct').textContent = (inv * 100).toFixed(1);
+  drawGauge(inv);
+
+  // Reserves
+  const ra = d.pool?.reserve_a ?? 0, rb = d.pool?.reserve_b ?? 0;
+  if (!initRA && ra) initRA = ra;
+  if (!initRB && rb) initRB = rb;
+  const mx = Math.max(initRA, initRB, ra, rb, 1);
+  document.getElementById('bar-a').style.height = (ra / mx * 100) + '%';
+  document.getElementById('bar-b').style.height = (rb / mx * 100) + '%';
+  document.getElementById('bar-a-val').textContent = fmtBig(ra);
+  document.getElementById('bar-b-val').textContent = fmtBig(rb);
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+
+function connect() {
+  const dot = document.getElementById('conn-dot');
+  const lbl = document.getElementById('conn-label');
+  const es  = new EventSource('http://localhost:3000/feed');
+
+  es.addEventListener('snapshot', e => {
+    try {
+      dot.className = 'live';
+      lbl.textContent = 'live';
+      applySnapshot(JSON.parse(e.data));
+    } catch(err) { console.error(err); }
+  });
+
+  es.onerror = () => {
+    dot.className = '';
+    lbl.textContent = 'reconnecting…';
+    document.getElementById('status-pill').className = 'status-pill offline';
+    document.getElementById('status-text').textContent = 'offline';
+    es.close();
+    setTimeout(connect, 3000);
+  };
+}
+
+connect();
+
+// Age counter between SSE events
+setInterval(() => {
+  if (lastData?.oracle?.last_update_age_s >= 0) {
+    lastData.oracle.last_update_age_s++;
+    document.getElementById('oracle-age').textContent = lastData.oracle.last_update_age_s;
+  }
+}, 1000);
+</script>
+</body>
+</html>

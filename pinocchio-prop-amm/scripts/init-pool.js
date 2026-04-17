@@ -27,6 +27,7 @@ const {
   createAccount,
   getOrCreateAssociatedTokenAccount,
   mintTo,
+  TOKEN_PROGRAM_ID,
 } = require("@solana/spl-token");
 const bs58 = require("bs58");
 const fs = require("fs");
@@ -125,12 +126,16 @@ async function main() {
   console.log("Pool created + INIT_POOL:", sig1);
 
   // ── 5. Vaults (owned by pool_auth PDA) ────────────────────────────────────
+  // Must pass explicit keypairs: createAccount defaults to ATA which rejects
+  // off-curve PDA owners with TokenOwnerOffCurveError.
   console.log("\nCreating vault A (owner = pool_auth PDA)...");
-  const vaultA = await createAccount(conn, payer, mintA, poolAuthPda);
+  const vaultAKp = Keypair.generate();
+  const vaultA = await createAccount(conn, payer, mintA, poolAuthPda, vaultAKp);
   console.log("Vault A:", vaultA.toBase58());
 
   console.log("Creating vault B (owner = pool_auth PDA)...");
-  const vaultB = await createAccount(conn, payer, mintB, poolAuthPda);
+  const vaultBKp = Keypair.generate();
+  const vaultB = await createAccount(conn, payer, mintB, poolAuthPda, vaultBKp);
   console.log("Vault B:", vaultB.toBase58());
 
   // ── 6. LP mint (pool_auth PDA is mint authority) ──────────────────────────
@@ -139,13 +144,12 @@ async function main() {
   console.log("LP mint:", lpMint.toBase58());
 
   // ── 7. Dead LP account (locks MINIMUM_LIQUIDITY=1000 on first deposit) ────
-  // ATA of pool_auth PDA for LP mint — effectively burned (PDA has no key)
-  console.log("Creating dead LP account (ATA of pool_auth for LP mint)...");
-  const deadLpAcc = await getOrCreateAssociatedTokenAccount(
-    conn, payer, lpMint, poolAuthPda,
-    true /* allowOwnerOffCurve — pool_auth is a PDA */
-  );
-  const deadLpAccount = deadLpAcc.address;
+  // Use a plain token account with explicit keypair (same as vaults).
+  // ATA fails here because pinocchio's invoke_signed passes the account's
+  // is_signer from the AccountView context, which gets confused for ATA PDAs.
+  console.log("Creating dead LP account (owned by pool_auth PDA)...");
+  const deadLpKp  = Keypair.generate();
+  const deadLpAccount = await createAccount(conn, payer, lpMint, poolAuthPda, deadLpKp);
   console.log("Dead LP account:", deadLpAccount.toBase58());
 
   // ── 8. User token accounts + initial balance ──────────────────────────────
@@ -194,16 +198,17 @@ async function main() {
   const addLiqIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
-      { pubkey: poolPubkey,       isSigner: false, isWritable: true  },
-      { pubkey: userA,            isSigner: false, isWritable: true  },
-      { pubkey: vaultA,           isSigner: false, isWritable: true  },
-      { pubkey: userB,            isSigner: false, isWritable: true  },
-      { pubkey: vaultB,           isSigner: false, isWritable: true  },
-      { pubkey: lpMint,           isSigner: false, isWritable: true  },
-      { pubkey: userLp,           isSigner: false, isWritable: true  },
-      { pubkey: deadLpAccount,    isSigner: false, isWritable: true  },
-      { pubkey: payer.publicKey,  isSigner: true,  isWritable: false },
-      { pubkey: poolAuthPda,      isSigner: false, isWritable: false },
+      { pubkey: poolPubkey,         isSigner: false, isWritable: true  },
+      { pubkey: userA,              isSigner: false, isWritable: true  },
+      { pubkey: vaultA,             isSigner: false, isWritable: true  },
+      { pubkey: userB,              isSigner: false, isWritable: true  },
+      { pubkey: vaultB,             isSigner: false, isWritable: true  },
+      { pubkey: lpMint,             isSigner: false, isWritable: true  },
+      { pubkey: userLp,             isSigner: false, isWritable: true  },
+      { pubkey: deadLpAccount,      isSigner: false, isWritable: true  },
+      { pubkey: payer.publicKey,    isSigner: true,  isWritable: true  },
+      { pubkey: poolAuthPda,        isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID,   isSigner: false, isWritable: false },
     ],
     data: addLiqData,
   });

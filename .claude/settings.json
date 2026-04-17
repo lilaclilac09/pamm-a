@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -v -s -X POST 'https://devnet.helius-rpc.com/?api-key=c8a62035-6378-4ddd-9cde-ab3967305ebc' -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getVersion\"}')",
+      "Bash(RUST_LOG=info NO_PROXY=\"*\" HTTPS_PROXY=\"\" HTTP_PROXY=\"\" http_proxy=\"\" https_proxy=\"\" all_proxy=\"\" cargo run --release --bin oracle-bot)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(python3 -m json.tool echo \"---\" tail -20 /tmp/oracle-bot.log)",
+      "Bash(python3 -m json.tool echo \"\")",
+      "Bash(pkill -f oracle-bot)",
+      "Bash(curl -s http://localhost:3000/feed)",
+      "WebFetch(domain:www.helius.dev)",
+      "WebFetch(domain:github.com)",
+      "WebSearch"
+    ]
+  }
+}

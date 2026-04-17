@@ -2,17 +2,22 @@
 //!
 //! GET /health  → {"status": "running"|"halted", "uptime_s": N, ...}
 //! GET /metrics → full JSON snapshot of both arms
-//!
-//! Bind port from `cfg.metrics_port` (default 3000).
+//! GET /pnl     → PnL breakdown
+//! GET /feed    → SSE stream — one JSON event per second for the dashboard
 
+use async_stream::stream;
 use axum::{
     extract::State,
-    response::Json,
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        Json,
+    },
     routing::get,
     Router,
 };
 use solana_sdk::signature::Signer;
 use std::{
+    convert::Infallible,
     net::SocketAddr,
     sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -39,10 +44,11 @@ pub async fn serve(cfg: Arc<Config>, state: Arc<SharedState>) {
         .route("/health",  get(health_handler))
         .route("/metrics", get(metrics_handler))
         .route("/pnl",     get(pnl_handler))
+        .route("/feed",    get(feed_handler))
         .with_state(Arc::clone(&ms));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], cfg.metrics_port));
-    info!("metrics server: http://localhost:{}/metrics", cfg.metrics_port);
+    info!("metrics server: http://localhost:{}/metrics  (SSE: /feed)", cfg.metrics_port);
 
     let listener = TcpListener::bind(addr).await.expect("metrics bind failed");
     axum::serve(listener, app).await.expect("metrics server failed");
@@ -215,4 +221,84 @@ async fn metrics_handler(State(ms): State<Arc<MetricsState>>) -> Json<serde_json
             "daily_pnl_pct":     m.daily_pnl_pct,
         },
     }))
+}
+
+// ── SSE feed ──────────────────────────────────────────────────────────────────
+
+async fn feed_handler(
+    State(ms): State<Arc<MetricsState>>,
+) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+    let s = stream! {
+        loop {
+            let data = build_feed_snapshot(&ms).await;
+            let event = Event::default()
+                .event("snapshot")
+                .data(data);
+            yield Ok::<Event, Infallible>(event);
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+    };
+    Sse::new(s).keep_alive(KeepAlive::default())
+}
+
+async fn build_feed_snapshot(ms: &MetricsState) -> String {
+    let pool = ms.shared.pool.read().await.clone();
+    let m    = ms.shared.metrics.read().await;
+    let mm   = ms.shared.mm_book.read().await;
+    let book = ms.shared.lp_book.read().await;
+
+    let now_unix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let last_update_age = if pool.last_update == i64::MIN {
+        -1i64
+    } else {
+        now_unix - pool.last_update
+    };
+
+    // Spread in bps (read from last oracle update stored in pool)
+    let spread_bps = if pool.oracle_price > 0 { m.last_spread_bps } else { 0 };
+
+    let snap = serde_json::json!({
+        "ts": now_unix,
+        "uptime_s": ms.start_time.elapsed().as_secs(),
+        "halted": ms.shared.is_halted(),
+        "oracle": {
+            "price": pool.oracle_price,
+            "cycles": m.oracle_cycles,
+            "last_update_age_s": last_update_age,
+            "spread_bps": spread_bps,
+        },
+        "pool": {
+            "reserve_a": pool.reserve_a,
+            "reserve_b": pool.reserve_b,
+            "lp_supply": pool.lp_supply,
+            "fee_a": pool.fee_a,
+            "fee_b": pool.fee_b,
+        },
+        "trading": {
+            "cycles": m.trade_cycles,
+            "errors": m.trade_errors,
+            "inventory_ratio": m.inventory_ratio,
+            "total_swaps": mm.total_swaps,
+            "volume_b": mm.volume_b,
+            "gross_pnl_b": mm.gross_pnl_b,
+            "avg_slippage_bps": mm.avg_slippage_bps,
+            "last_swap": {
+                "in_amount": mm.last_in_amount,
+                "out_amount": mm.last_out_amount,
+                "slippage_bps": mm.last_slippage_bps,
+            }
+        },
+        "lp": {
+            "pool_value_b": book.pool_value_b,
+            "fee_income_b": book.fee_income_b,
+            "pnl_bps": book.pnl_bps,
+            "il_bps": book.il_bps,
+        }
+    });
+
+    snap.to_string()
 }

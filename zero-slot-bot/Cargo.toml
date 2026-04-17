@@ -1,0 +1,38 @@
+[package]
+name = "zero-slot-bot"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "zero-slot"
+path = "src/main.rs"
+
+[dependencies]
+# LaserStream gRPC — Yellowstone protocol, Helius API key as x-token header
+# solana-sdk 2.x uses curve25519-dalek 4.x (zeroize ^1), compatible with tonic 0.12
+yellowstone-grpc-client = "8"
+yellowstone-grpc-proto  = "8"
+
+# Solana SDK (2.x avoids zeroize conflict with tonic/rustls)
+solana-sdk  = "2"
+
+# Async runtime
+tokio        = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+futures-util = "0.3"
+
+# HTTP — Helius Sender endpoint + JSON-RPC (blockhash, pool state)
+reqwest = { version = "0.12", features = ["json"] }
+
+# Encoding
+bs58    = "0.5"
+base64  = { version = "0.22", features = ["alloc"] }
+bincode = "1"
+
+# Misc
+anyhow             = "1"
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+dotenv             = "0.15"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -128,7 +128,10 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
         // ── Compute vol_adj via EWMA ──────────────────────────────────────────
         ewma.update(oracle_price);
         let hist_vol = ewma.vol_bps();
-        let vol_adj  = conf_bps.max(hist_vol).min(cfg.max_vol_factor);
+        // Clamp so spread_bps + vol_adj never exceeds on-chain MAX_SPREAD_BPS (2000)
+        const MAX_SPREAD_BPS: u32 = 2000;
+        let max_vol = MAX_SPREAD_BPS.saturating_sub(cfg.base_spread_bps);
+        let vol_adj = (conf_bps as u32).max(hist_vol).min(cfg.max_vol_factor).min(max_vol);
 
         // ── Skip filter ───────────────────────────────────────────────────────
         let silence_expired = last_sent_at.elapsed().as_secs() >= cfg.max_oracle_silence_secs;
