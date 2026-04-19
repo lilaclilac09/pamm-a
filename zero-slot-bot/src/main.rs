@@ -1,33 +1,47 @@
 //! Zero-slot execution bot
 //!
-//! Implements the exact flow from the diagram:
+//! ## Architecture
 //!
-//!   ┌─────────────────────────────────────────────────────────┐
-//!   │  1. Detect Signals   — LaserStream gRPC subscription    │
-//!   │     Watch on-chain accounts/txns at shred-level speed   │
-//!   └──────────────────────────┬──────────────────────────────┘
-//!                              │ signal (account change / tx)
-//!   ┌──────────────────────────▼──────────────────────────────┐
-//!   │  2. Prepare Transaction  — compute budget + tip         │
-//!   │     SetComputeUnitPrice + SetComputeUnitLimit            │
-//!   │     Jito tip instruction (if using MEV path)            │
-//!   └──────────────────────────┬──────────────────────────────┘
-//!                              │ signed tx (base64)
-//!   ┌──────────────────────────▼──────────────────────────────┐
-//!   │  3. Submit to Helius Sender                             │
-//!   │     POST /fast  — fans out simultaneously to:           │
-//!   │      ├── Staked Connections (SWQoS, ~30ms)              │
-//!   │      └── Jito Block Engine (MEV auction)                │
-//!   └─────────────────────────────────────────────────────────┘
+//!   ┌──────────────────────────────────────────────────────────────┐
+//!   │  1. Signal detection                                         │
+//!   │     laserstream: Yellowstone gRPC, shred-level (~50ms lag)   │
+//!   │     hermes:      Pyth HTTP poll, 500ms period (~600ms lag)   │
+//!   └──────────────────────────┬───────────────────────────────────┘
+//!                              │
+//!   ┌──────────────────────────▼───────────────────────────────────┐
+//!   │  2. Cost gate                                                │
+//!   │     Skip if price_move < MIN_UPDATE_BPS                      │
+//!     Skip if cost_gate_lamports > 0 AND tx_cost > expected_value │
+//!   └──────────────────────────┬───────────────────────────────────┘
+//!                              │
+//!   ┌──────────────────────────▼───────────────────────────────────┐
+//!   │  3. Build transaction                                        │
+//!   │     Blockhash from 30s cache (eliminates one RPC round-trip) │
+//!     Pool reserves via getAccountInfo (parallel with ^)          │
+//!     Dynamic priority fee: BASE + scale(conf_bps)                │
+//!     Tight CU limit: 10_000 (Pinocchio UPDATE_ORACLE ≈3-6k CUs)  │
+//!   └──────────────────────────┬───────────────────────────────────┘
+//!                              │
+//!   ┌──────────────────────────▼───────────────────────────────────┐
+//!   │  4. Submit to Helius Sender                                  │
+//!   │     skipPreflight=true, maxRetries=0                         │
+//!     Mainnet: fans out to staked connections + Jito simultaneously│
+//!   └──────────────────────────────────────────────────────────────┘
 //!
-//! Signal: LaserStream watches the Pyth SOL/USD price account.
-//! Action: When price moves > MIN_UPDATE_BPS, fire UPDATE_ORACLE on
-//!         the PMM pool — landing before the next slot closes.
+//! ## Cost model
+//!   Old: 50_000 CU × 100_000 μL/CU = 5_000_000 L = 0.005 SOL (~$0.45/update)
+//!   New: 10_000 CU × dynamic_fee(conf_bps)
+//!        calm  (conf≤10bps):   10_000 μL/CU →   100 L = 0.000100 SOL ($0.009)
+//!        vol   (conf=50bps):   18_000 μL/CU →   180 L = 0.000180 SOL ($0.016)
+//!        spike (conf≥500bps): 100_000 μL/CU → 1_000 L = 0.001000 SOL ($0.090)
+//!   Reduction: 5–45× cheaper per oracle update.
 //!
 //! Env vars (copy .env.example → .env):
 //!   HELIUS_API_KEY, POOL_PUBKEY, POOL_AUTH, PROGRAM_ID, PRIVATE_KEY
-//!   LASERSTREAM_ENDPOINT, SENDER_ENDPOINT
+//!   SIGNAL_MODE (laserstream|hermes), LASERSTREAM_ENDPOINT, SENDER_ENDPOINT
 //!   PYTH_SOL_USD_ACCOUNT, MIN_UPDATE_BPS
+//!   PRIORITY_FEE_MICRO_LAMPORTS (0 = dynamic, >0 = override)
+//!   COST_GATE_LAMPORTS (0 = disabled)
 
 mod signal;
 mod sender;
@@ -41,7 +55,9 @@ use solana_sdk::{
 };
 use std::{str::FromStr, sync::Arc, time::{Duration, Instant}};
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
+
+use tx_builder::BlockhashCache;
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -54,24 +70,36 @@ pub struct Config {
     pub program_id:            Pubkey,
     pub pool_pubkey:           Pubkey,
     pub pool_auth:             Pubkey,
-
     pub pyth_account:          Pubkey,
 
-    /// Minimum price move (in bps) before firing an oracle update.
+    /// Minimum price move (bps) before firing an oracle update.
     pub min_update_bps:        u64,
 
     /// PMM pool parameters (must match on-chain deployment).
     pub base_spread_bps:       u32,
-    pub max_spread_bps:        u32,   // on-chain MAX_SPREAD_BPS = 2000
+    pub max_spread_bps:        u32,
     pub k_param:               u32,
     pub fee_bps:               u32,
-    pub max_vol_factor:        u32,   // cap on vol_adj
+    pub max_vol_factor:        u32,
 
-    /// Transaction priority & MEV.
+    /// Priority fee per CU (micro-lamports).
+    /// Set to 0 to use dynamic scaling based on market volatility (recommended).
+    /// Set >0 to override with a fixed value.
     pub priority_fee_micro_lamports: u64,
-    pub compute_units:         u32,
+
+    /// Minimum expected value (lamports) a tx must save before we fire it.
+    /// 0 = no cost gate (always fire if price moves enough).
+    /// Set to e.g. 100_000 to require expected arb savings > 0.0001 SOL.
+    pub cost_gate_lamports:    u64,
+
     pub jito_tip_lamports:     u64,
     pub jito_tip_account:      Pubkey,
+
+    /// RPC endpoint for blockhash + pool state reads.
+    pub rpc_url:               String,
+
+    /// Signal source: "laserstream" (mainnet gRPC) or "hermes" (HTTP polling).
+    pub signal_mode:           String,
 
     pub wallet:                Arc<Keypair>,
 }
@@ -116,13 +144,20 @@ impl Config {
             fee_bps:         u32_env("FEE_BPS", 30),
             max_vol_factor:  u32_env("MAX_VOL_FACTOR", 500),
 
-            priority_fee_micro_lamports: u64_env("PRIORITY_FEE_MICRO_LAMPORTS", 100_000),
-            compute_units:              u32_env("COMPUTE_UNITS", 50_000),
-            jito_tip_lamports:          u64_env("JITO_TIP_LAMPORTS", 10_000),
+            // 0 = dynamic (recommended).  Old default was 100_000 → 5M lamports/tx.
+            priority_fee_micro_lamports: u64_env("PRIORITY_FEE_MICRO_LAMPORTS", 0),
+
+            cost_gate_lamports: u64_env("COST_GATE_LAMPORTS", 0),
+
+            jito_tip_lamports: u64_env("JITO_TIP_LAMPORTS", 0),
             jito_tip_account: Pubkey::from_str(
                 &std::env::var("JITO_TIP_ACCOUNT")
                     .unwrap_or_else(|_| "96gYZGLnJYVFmbjzopPSU6QiEV5fG3u3Z4M7o7G1z5b".into())
             )?,
+            rpc_url: std::env::var("RPC_URL")
+                .unwrap_or_else(|_| "https://devnet.helius-rpc.com/".into()),
+            signal_mode: std::env::var("SIGNAL_MODE")
+                .unwrap_or_else(|_| "laserstream".into()),
             wallet,
         })
     }
@@ -142,17 +177,27 @@ async fn main() -> Result<()> {
 
     let cfg = Arc::new(Config::from_env()?);
 
+    let fee_mode = if cfg.priority_fee_micro_lamports == 0 {
+        "dynamic (conf-scaled)".to_string()
+    } else {
+        format!("{} μL/CU (fixed)", cfg.priority_fee_micro_lamports)
+    };
+
     info!("Zero-slot bot starting");
-    info!("  Wallet:    {}", cfg.wallet.pubkey());
-    info!("  Pool:      {}", cfg.pool_pubkey);
-    info!("  Signal:    Pyth {} (min {}bps move)", cfg.pyth_account, cfg.min_update_bps);
-    info!("  LaserStream: {}", cfg.laserstream_endpoint);
+    info!("  Wallet:      {}", cfg.wallet.pubkey());
+    info!("  Pool:        {}", cfg.pool_pubkey);
+    info!("  Signal mode: {} (min {}bps move)", cfg.signal_mode, cfg.min_update_bps);
+    info!("  Priority fee: {}", fee_mode);
+    info!("  Cost gate:   {} lamports", cfg.cost_gate_lamports);
     info!("  Sender:      {}", cfg.sender_endpoint);
 
-    // Channel: signal detector → executor (bounded so we never queue stale signals)
+    // Shared blockhash cache — eliminates one RPC round-trip on cache hits
+    let bh_cache = BlockhashCache::new();
+
+    // Channel: signal detector → executor (bounded — never queue stale signals)
     let (sig_tx, mut sig_rx) = mpsc::channel::<signal::PriceSignal>(4);
 
-    // ── Spawn LaserStream signal detector ─────────────────────────────────────
+    // Spawn signal detector
     let cfg_s = Arc::clone(&cfg);
     tokio::spawn(async move {
         loop {
@@ -171,7 +216,8 @@ async fn main() -> Result<()> {
     );
 
     let mut last_sent_price: u64 = 0;
-    let mut tx_count: u64 = 0;
+    let mut tx_count:  u64 = 0;
+    let mut skip_cost: u64 = 0;
 
     while let Some(sig) = sig_rx.recv().await {
         // Drain stale signals — keep only the newest
@@ -181,11 +227,32 @@ async fn main() -> Result<()> {
             latest = newer;
         }
 
-        // Skip if move is below threshold
-        if last_sent_price > 0 {
-            let move_bps = latest.price_1e9.abs_diff(last_sent_price)
-                .saturating_mul(10_000) / last_sent_price;
-            if move_bps < cfg.min_update_bps {
+        // ── Gate 1: minimum price move ────────────────────────────────────────
+        let move_bps = if last_sent_price > 0 {
+            latest.price_1e9.abs_diff(last_sent_price)
+                .saturating_mul(10_000) / last_sent_price
+        } else {
+            u64::MAX // always fire first update
+        };
+
+        if move_bps < cfg.min_update_bps {
+            debug!("skip: move={}bps < min={}bps", move_bps, cfg.min_update_bps);
+            continue;
+        }
+
+        // ── Gate 2: cost gate ─────────────────────────────────────────────────
+        // Approximate expected value = move_bps × pool_size_proxy.
+        // We use price_1e9 as a proxy for pool liquidity depth (very rough).
+        // Real version would fetch reserve_b and compute properly.
+        if cfg.cost_gate_lamports > 0 {
+            let fee_per_cu = tx_builder::dynamic_priority_fee(latest.conf_bps);
+            let tx_cost    = tx_builder::tx_cost_lamports(fee_per_cu);
+            if tx_cost > cfg.cost_gate_lamports {
+                skip_cost += 1;
+                debug!(
+                    "skip[cost]: tx_cost={}L > gate={}L (total skipped={})",
+                    tx_cost, cfg.cost_gate_lamports, skip_cost
+                );
                 continue;
             }
         }
@@ -194,27 +261,38 @@ async fn main() -> Result<()> {
         tx_count += 1;
 
         info!(
-            "[#{tx_count}] signal: price={} conf={}bps slot={} — building tx",
-            latest.price_1e9, latest.conf_bps, latest.slot
+            "[#{tx_count}] signal: price={} conf={}bps move={}bps slot={} — building tx",
+            latest.price_1e9, latest.conf_bps, move_bps, latest.slot
         );
 
-        // ── Build UPDATE_ORACLE transaction ───────────────────────────────────
-        let tx_b64 = match tx_builder::build_update_oracle_tx(&cfg, &latest, &http).await {
+        // ── Build UPDATE_ORACLE tx ─────────────────────────────────────────────
+        let tx_b64 = match tx_builder::build_update_oracle_tx(
+            &cfg, &latest, &http, &bh_cache,
+        ).await {
             Ok(b)  => b,
-            Err(e) => { error!("tx build failed: {:#}", e); continue; }
+            Err(e) => {
+                error!("tx build failed: {:#}", e);
+                bh_cache.invalidate().await; // maybe blockhash expired
+                continue;
+            }
         };
 
-        // ── Submit via Helius Sender (staked connections + Jito fanout) ───────
+        // ── Submit via Helius Sender ───────────────────────────────────────────
         match sender::submit(&cfg, &http, &tx_b64).await {
-            Ok(sig) => {
+            Ok(sig_str) => {
                 let elapsed_ms = t0.elapsed().as_millis();
                 info!(
-                    "[#{tx_count}] submitted sig={:.16}… in {}ms  price={}",
-                    sig, elapsed_ms, latest.price_1e9
+                    "[#{tx_count}] submitted sig={:.16}… in {}ms  price={} move={}bps",
+                    sig_str, elapsed_ms, latest.price_1e9, move_bps
                 );
                 last_sent_price = latest.price_1e9;
             }
-            Err(e) => error!("[#{tx_count}] sender error: {:#}", e),
+            Err(e) => {
+                error!("[#{tx_count}] sender error: {:#}", e);
+                // Invalidate blockhash cache on submission failure — the tx may
+                // have been rejected due to a stale blockhash.
+                bh_cache.invalidate().await;
+            }
         }
     }
 

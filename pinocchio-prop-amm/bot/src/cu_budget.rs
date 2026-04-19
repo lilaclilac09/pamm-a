@@ -1,6 +1,6 @@
 //! Compute-unit budgeting + pre-simulation guard.
 //!
-//! `send_budgeted` does three things in one call:
+//! `send_budgeted` does four things in one call:
 //!
 //!   1. **Simulate** — runs the transaction against the current chain state.
 //!      Returns `Err` immediately if simulation fails, saving the fee.
@@ -10,11 +10,20 @@
 //!      `ComputeBudgetInstruction::set_compute_unit_limit(budget)`.
 //!      This cuts priority fees vs the default 200k CU budget.
 //!
-//!   3. **Send** — signs the budgeted transaction and submits it.
+//!   3. **Priority fee** — prepends `SetComputeUnitPrice` so oracle-bot can
+//!      compete with other oracle operators on mainnet.  Fee is passed in by
+//!      the caller; set 0 on devnet.
+//!
+//!   4. **Send** — signs the budgeted transaction and submits it.
 //!
 //! Only use this for *our own* instructions (UPDATE_ORACLE, ADD_LIQUIDITY,
 //! REMOVE_LIQUIDITY). Jupiter swap transactions already contain their own
 //! CU budgets set by the Jupiter API.
+//!
+//! ## Cost model (UPDATE_ORACLE example)
+//!   Simulated CUs ≈ 4000  →  budget = 4600 (15% headroom)
+//!   Priority fee 10_000 μL/CU × 4600 CU = 46_000_000 μL = 46_000 L ≈ 0.000046 SOL
+//!   vs old static 50_000 CU × any fixed fee: 10× cheaper at the same fee rate.
 
 use anyhow::{Context, Result};
 use solana_client::{
@@ -39,22 +48,25 @@ const HEADROOM_PCT: u64 = 15;
 const CU_HARD_CAP: u32 = 1_400_000;
 
 /// Minimum CU limit to set even if simulation reports very low usage.
-/// Prevents edge cases where simulation underestimates.
 const CU_MIN: u32 = 2_000;
 
-/// Simulate `instructions`, compute an optimal CU limit, then build, sign,
+/// Simulate `instructions`, compute an optimal CU limit, prepend
+/// `SetComputeUnitPrice` at `priority_fee_micro_lamports`, then build, sign,
 /// and send the transaction.
 ///
+/// Pass `priority_fee_micro_lamports = 0` for devnet / no priority.
+/// On mainnet, set via `PRIORITY_FEE_MICRO_LAMPORTS` env var (e.g. 10_000).
+///
 /// Returns `(signature, units_used)` on success.
-/// Returns `Err` if simulation reports a program error — the transaction is
-/// NOT sent in that case, so no fee is wasted.
+/// Returns `Err` if simulation reports a program error — tx is NOT sent.
 pub fn send_budgeted(
-    client:       &RpcClient,
-    instructions: &[Instruction],
-    signer:       &Keypair,
-    blockhash:    Hash,
+    client:                      &RpcClient,
+    instructions:                &[Instruction],
+    signer:                      &Keypair,
+    blockhash:                   Hash,
+    priority_fee_micro_lamports: u64,
 ) -> Result<(String, u32)> {
-    // ── 1. Build a scratch tx for simulation (no CU budget ix yet) ────────────
+    // ── 1. Build a scratch tx for simulation (no budget ixs yet) ─────────────
     let sim_msg = Message::new(instructions, Some(&signer.pubkey()));
     let mut sim_tx = Transaction::new_unsigned(sim_msg);
     sim_tx.sign(&[signer], blockhash);
@@ -64,7 +76,7 @@ pub fn send_budgeted(
         .simulate_transaction_with_config(
             &sim_tx,
             RpcSimulateTransactionConfig {
-                sig_verify:            false, // skip sig check — we care about logic errors
+                sig_verify:               false,
                 replace_recent_blockhash: true,
                 ..RpcSimulateTransactionConfig::default()
             },
@@ -81,12 +93,19 @@ pub fn send_budgeted(
     let budget = ((units_used * (100 + HEADROOM_PCT)) / 100)
         .clamp(CU_MIN as u64, CU_HARD_CAP as u64) as u32;
 
-    debug!("CU sim={} budget={}", units_used, budget);
+    debug!(
+        "CU sim={} budget={} priority_fee={}μL/CU",
+        units_used, budget, priority_fee_micro_lamports
+    );
 
-    // ── 4. Rebuild with CU limit prepended ───────────────────────────────────
-    let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(budget);
-    let mut all_ixs: Vec<Instruction> = Vec::with_capacity(instructions.len() + 1);
-    all_ixs.push(cu_ix);
+    // ── 4. Rebuild with budget ixs prepended ─────────────────────────────────
+    let mut all_ixs: Vec<Instruction> = Vec::with_capacity(instructions.len() + 2);
+    all_ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(budget));
+    if priority_fee_micro_lamports > 0 {
+        all_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
+            priority_fee_micro_lamports,
+        ));
+    }
     all_ixs.extend_from_slice(instructions);
 
     let msg = Message::new(&all_ixs, Some(&signer.pubkey()));

@@ -199,7 +199,7 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
         };
 
         let ix = build_update_oracle_ix(&cfg, oracle_price, vol_adj, target_a, target_b);
-        match send_budgeted(&client, &[ix], &cfg.wallet, blockhash)
+        match send_budgeted(&client, &[ix], &cfg.wallet, blockhash, cfg.priority_fee_micro_lamports)
             .context("UPDATE_ORACLE send_budgeted")
         {
             Ok((sig, _cu)) => {

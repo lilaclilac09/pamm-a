@@ -49,6 +49,13 @@ pub struct Config {
     pub max_twap_age_secs:       i64,  // reject TWAP if newest obs is older than this
     pub slippage_bps:            u64,
 
+    // ── Transaction priority ──────────────────────────────────────────────
+    /// Priority fee per CU in micro-lamports.
+    /// 0 = no priority fee (devnet).
+    /// On mainnet, set e.g. 10_000 to pay ~0.000046 SOL per oracle update
+    /// (4600 simulated CUs × 10_000 μL/CU), competing without overpaying.
+    pub priority_fee_micro_lamports: u64,
+
     // ── Risk ─────────────────────────────────────────────────────────────
     pub max_consecutive_failures: u32,
     pub max_daily_loss_pct:       f64,  // e.g. 0.05 = 5%
@@ -147,6 +154,8 @@ impl Config {
             max_price_deviation_bps: u("MAX_PRICE_DEVIATION_BPS", 200) as u32,
             max_twap_age_secs:       u("MAX_TWAP_AGE_SECS", 10) as i64,
             slippage_bps:            u("SLIPPAGE_BPS", 80),
+
+            priority_fee_micro_lamports: u("PRIORITY_FEE_MICRO_LAMPORTS", 0),
 
             max_consecutive_failures: u("MAX_CONSECUTIVE_FAILURES", 5) as u32,
             max_daily_loss_pct:       f("MAX_DAILY_LOSS_PCT", 0.05),

@@ -270,7 +270,7 @@ fn send_swap(
         data,
     };
 
-    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash)
+    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash, cfg.priority_fee_micro_lamports)
         .context("SWAP send_budgeted")?;
 
     // Fetch actual out amount from pool state delta would need two RPC calls.
@@ -319,7 +319,7 @@ fn send_add_liquidity(
         data,
     };
 
-    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash)
+    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash, cfg.priority_fee_micro_lamports)
         .context("ADD_LIQUIDITY send_budgeted")?;
     Ok(sig)
 }
