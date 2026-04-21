@@ -7,6 +7,9 @@ use std::str::FromStr;
 pub struct Config {
     // ── Network ──────────────────────────────────────────────────────────────
     pub rpc_url: String,
+    /// WebSocket URL for LaserStream (accountSubscribe).
+    /// Defaults to wss:// version of rpc_url. Override with WS_URL env var.
+    pub ws_url:  String,
     pub wallet:  Keypair,
 
     // ── Program / pool accounts ───────────────────────────────────────────
@@ -104,9 +107,26 @@ impl Config {
                 .unwrap_or(default)
         };
 
+        // WS endpoint: defaults to wss:// version of RPC_URL.
+        // Use a separate WS_URL env var if the HTTP RPC differs from the WS endpoint.
+        let rpc_url = std::env::var("RPC_URL")
+            .unwrap_or_else(|_| "https://api.devnet.solana.com".into());
+        let ws_url = std::env::var("WS_URL").unwrap_or_else(|_| {
+            // Derive WSS URL from the HTTP RPC URL: replace scheme, strip query string.
+            let stripped = if rpc_url.starts_with("https://") {
+                &rpc_url["https://".len()..]
+            } else if rpc_url.starts_with("http://") {
+                &rpc_url["http://".len()..]
+            } else {
+                &rpc_url
+            };
+            let host_path = stripped.split('?').next().unwrap_or(stripped);
+            format!("wss://{}", host_path)
+        });
+
         Ok(Config {
-            rpc_url: std::env::var("RPC_URL")
-                .unwrap_or_else(|_| "https://api.devnet.solana.com".into()),
+            rpc_url,
+            ws_url,
             wallet,
 
             program_id:      p("PROGRAM_ID")?,

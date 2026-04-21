@@ -7,13 +7,11 @@
 //!   4. Record swap in MmBook for PnL tracking
 
 use anyhow::{Context, Result};
-use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     hash::Hash,
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
     signer::Signer,
-    transaction::Transaction,
 };
 use std::{str::FromStr, sync::Arc, time::Instant};
 use tokio::time::{sleep, Duration};
@@ -21,7 +19,7 @@ use tracing::{info, warn, error};
 
 use crate::{
     config::Config,
-    cu_budget::send_budgeted,
+    jito, rpc,
     risk::SharedState,
 };
 
@@ -36,8 +34,8 @@ impl BhCache {
     fn stale(&self) -> bool {
         self.fetched_at.map_or(true, |t| t.elapsed().as_secs() >= 20)
     }
-    fn refresh(&mut self, client: &RpcClient) -> Result<()> {
-        let bh = client.get_latest_blockhash().context("get_latest_blockhash")?;
+    async fn refresh(&mut self, http: &reqwest::Client, url: &str) -> Result<()> {
+        let bh = rpc::get_latest_blockhash(http, url).await.context("get_latest_blockhash")?;
         self.hash = Some(bh);
         self.fetched_at = Some(Instant::now());
         Ok(())
@@ -50,7 +48,7 @@ impl BhCache {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
-    let client = RpcClient::new(cfg.rpc_url.clone());
+    let http = crate::rpc::make_client();
     let mut bh = BhCache::new();
     let mut cycle: u64 = 0;
     // Alternate direction each cycle to keep pool balanced
@@ -68,7 +66,7 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
 
         cycle += 1;
 
-        match run_cycle(&cfg, &client, &mut bh, &state, direction).await {
+        match run_cycle(&cfg, &http, &mut bh, &state, direction).await {
             Ok(action) => {
                 info!("[trade #{}] {}", cycle, action);
                 state.trade_failures.store(0, std::sync::atomic::Ordering::Relaxed);
@@ -114,7 +112,7 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
 
 async fn run_cycle(
     cfg:       &Config,
-    client:    &RpcClient,
+    http:      &reqwest::Client,
     bh:        &mut BhCache,
     state:     &SharedState,
     direction: u8,
@@ -159,11 +157,9 @@ async fn run_cycle(
     }
 
     // Check we have enough tokens
-    let (user_in_bal, user_in_acc) = if direction == 0 {
-        (get_token_balance(client, &cfg.user_a)?, cfg.user_a)
-    } else {
-        (get_token_balance(client, &cfg.user_b)?, cfg.user_b)
-    };
+    let user_in_acc = if direction == 0 { cfg.user_a } else { cfg.user_b };
+    let user_in_bal = rpc::get_token_balance(http, &cfg.rpc_url, &user_in_acc).await
+        .unwrap_or(0);
 
     if user_in_bal < amount_in {
         warn!("trade: insufficient balance ({} < {}), skipping", user_in_bal, amount_in);
@@ -176,11 +172,11 @@ async fn run_cycle(
         return Ok(format!("skip: pool reserve_out too low ({} < {})", reserve_out, expected_out));
     }
 
-    if bh.stale() { bh.refresh(client)?; }
+    if bh.stale() { bh.refresh(http, &cfg.rpc_url).await?; }
     let blockhash = bh.get()?;
 
-    let (sig, out_amount) = send_swap(cfg, client, blockhash, direction, amount_in, 0)
-        .context("SWAP send")?;
+    let (sig, out_amount) = send_swap(cfg, http, blockhash, direction, amount_in, 0)
+        .await.context("SWAP send")?;
 
     // Record in MmBook
     {
@@ -206,36 +202,11 @@ async fn run_cycle(
 
 // ── Token balance ─────────────────────────────────────────────────────────────
 
-fn get_token_balance(client: &RpcClient, token_account: &Pubkey) -> Result<u64> {
-    let acc = client
-        .get_token_account_balance(token_account)
-        .context("get_token_account_balance")?;
-    Ok(acc.amount.parse::<u64>().unwrap_or(0))
-}
-
 // ── SWAP instruction ──────────────────────────────────────────────────────────
-//
-// Accounts (8):
-//   0  pool      writable
-//   1  user_in   writable
-//   2  vault_in  writable
-//   3  user_out  writable
-//   4  vault_out writable
-//   5  user      signer (readonly)
-//   6  pool_auth readonly
-//   7  TOKEN_PROGRAM_ID readonly
-//
-// Data (18 bytes):
-//   [0]      discriminant = 2
-//   [1..9]   amount_in  u64 le
-//   [9..17]  min_out    u64 le
-//   [17]     direction  u8 (0 = A→B, 1 = B→A)
-//
-// Returns (signature, simulated_out_amount)
 
-fn send_swap(
+pub async fn send_swap(
     cfg:       &Config,
-    client:    &RpcClient,
+    http:      &reqwest::Client,
     blockhash: Hash,
     direction: u8,
     amount_in: u64,
@@ -270,56 +241,11 @@ fn send_swap(
         data,
     };
 
-    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash, cfg.priority_fee_micro_lamports)
-        .context("SWAP send_budgeted")?;
+    let sig = jito::send_with_tip(
+        http, &cfg.rpc_url, &[ix], &cfg.wallet, blockhash,
+        &cfg.jito_endpoint, cfg.jito_tip_lamports, cfg.priority_fee_micro_lamports,
+    ).await.context("SWAP send")?;
 
-    // Fetch actual out amount from pool state delta would need two RPC calls.
-    // For now return 0; MmBook will record what we can compute from oracle.
     Ok((sig, 0))
 }
 
-// ── ADD_LIQUIDITY instruction ──────────────────────────────────────────────────
-//
-// Accounts (11): pool, user_a, vault_a, user_b, vault_b, lp_mint, user_lp,
-//                dead_lp_account, user(signer), pool_auth, TOKEN_PROGRAM_ID
-// Data (25 bytes): [3] + amount_a(8) + amount_b(8) + min_lp_out(8)
-
-#[allow(dead_code)]
-fn send_add_liquidity(
-    cfg:        &Config,
-    client:     &RpcClient,
-    blockhash:  Hash,
-    amount_a:   u64,
-    amount_b:   u64,
-    min_lp_out: u64,
-) -> Result<String> {
-    let token_program = Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap();
-
-    let mut data = Vec::with_capacity(25);
-    data.push(3u8);
-    data.extend_from_slice(&amount_a.to_le_bytes());
-    data.extend_from_slice(&amount_b.to_le_bytes());
-    data.extend_from_slice(&min_lp_out.to_le_bytes());
-
-    let ix = Instruction {
-        program_id: cfg.program_id,
-        accounts: vec![
-            AccountMeta::new(cfg.pool_pubkey,     false),
-            AccountMeta::new(cfg.user_a,          false),
-            AccountMeta::new(cfg.vault_a,         false),
-            AccountMeta::new(cfg.user_b,          false),
-            AccountMeta::new(cfg.vault_b,         false),
-            AccountMeta::new(cfg.lp_mint,         false),
-            AccountMeta::new(cfg.user_lp,         false),
-            AccountMeta::new(cfg.dead_lp_account, false),
-            AccountMeta::new_readonly(cfg.wallet.pubkey(), true),
-            AccountMeta::new_readonly(cfg.pool_auth,       false),
-            AccountMeta::new_readonly(token_program,       false),
-        ],
-        data,
-    };
-
-    let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash, cfg.priority_fee_micro_lamports)
-        .context("ADD_LIQUIDITY send_budgeted")?;
-    Ok(sig)
-}

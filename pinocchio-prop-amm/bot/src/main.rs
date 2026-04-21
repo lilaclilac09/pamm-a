@@ -14,14 +14,17 @@
 mod config;
 mod cu_budget;
 mod humidifi_arm;
+mod jito;
+mod laserstream;
 mod metrics;
 mod oracle_arm;
 mod pyth;
+mod reader_arm;
 mod risk;
+mod rpc;
 mod trading_arm;
 
 use anyhow::{Context, Result};
-use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::Signer;
 use std::sync::Arc;
 use tracing::info;
@@ -33,11 +36,10 @@ async fn main() -> Result<()> {
 
     let cfg = Arc::new(config::Config::from_env().context("config load failed")?);
 
-    // Seed daily-PnL tracking with current balance
-    let client = RpcClient::new(cfg.rpc_url.clone());
-    let start_lamports = client
-        .get_balance(&cfg.wallet.pubkey())
-        .context("initial balance fetch")?;
+    // Seed daily-PnL tracking with current balance (non-fatal — devnet can be flaky)
+    let http = rpc::make_client();
+    let start_lamports = rpc::get_balance(&http, &cfg.rpc_url, &cfg.wallet.pubkey())
+        .await.unwrap_or(0);
 
     let state = risk::SharedState::new(start_lamports);
 
@@ -48,18 +50,34 @@ async fn main() -> Result<()> {
         cfg.update_interval_ms, cfg.trade_interval_ms);
     info!("Metrics:      http://localhost:{}/metrics", cfg.metrics_port);
 
+    // ── LaserStream: real-time account subscriptions ──────────────────────────
+    // PMM pool stream: shared by oracle_arm (skip RPC poll) and trading_arm
+    // HumidiFi pool stream: triggers humidifi_arm the instant their oracle moves
+    let pool_stream = laserstream::spawn_pool_stream(&cfg.ws_url, &cfg.pool_pubkey);
+    let humidifi_stream = laserstream::spawn_raw_stream(
+        &cfg.ws_url,
+        &humidifi_arm::HUMIDIFI_POOL_PUBKEY,
+        "humidifi_pool",
+    );
+
     let cfg_a = Arc::clone(&cfg);
     let cfg_t = Arc::clone(&cfg);
     let cfg_h = Arc::clone(&cfg);
+    let cfg_r = Arc::clone(&cfg);
     let cfg_m = Arc::clone(&cfg);
     let st_a  = Arc::clone(&state);
     let st_t  = Arc::clone(&state);
     let st_h  = Arc::clone(&state);
+    let st_r  = Arc::clone(&state);
     let st_m  = Arc::clone(&state);
 
-    let oracle   = tokio::spawn(async move { oracle_arm::run(cfg_a, st_a).await });
+    // reader_arm watches the same pool stream — clone the receiver
+    let pool_stream_r = pool_stream.clone();
+
+    let oracle   = tokio::spawn(async move { oracle_arm::run(cfg_a, st_a, pool_stream).await });
     let trading  = tokio::spawn(async move { trading_arm::run(cfg_t, st_t).await });
-    let humidifi = tokio::spawn(async move { humidifi_arm::run(cfg_h, st_h).await });
+    let humidifi = tokio::spawn(async move { humidifi_arm::run(cfg_h, st_h, humidifi_stream).await });
+    let reader   = tokio::spawn(async move { reader_arm::run(cfg_r, st_r, pool_stream_r).await });
     let metrx    = tokio::spawn(async move { metrics::serve(cfg_m, st_m).await });
 
     // Wait for a shutdown signal or for any task to exit unexpectedly.
@@ -70,6 +88,7 @@ async fn main() -> Result<()> {
         r = oracle   => { tracing::error!("oracle_arm exited unexpectedly: {:?}",   r); }
         r = trading  => { tracing::error!("trading_arm exited unexpectedly: {:?}",  r); }
         r = humidifi => { tracing::error!("humidifi_arm exited unexpectedly: {:?}", r); }
+        r = reader   => { tracing::error!("reader_arm exited unexpectedly: {:?}",   r); }
         r = metrx    => { tracing::error!("metrics exited unexpectedly: {:?}",      r); }
     }
 

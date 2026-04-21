@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PMM Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #e6edf3; font-family: 'SF Mono','Fira Code',monospace; font-size: 13px; padding: 16px; }
+  h1   { font-size: 15px; color: #58a6ff; margin-bottom: 16px; letter-spacing: 2px; text-transform: uppercase; }
+  .section { font-size: 10px; color: #484f58; text-transform: uppercase; letter-spacing: 2px;
+             border-bottom: 1px solid #21262d; padding-bottom: 5px; margin: 14px 0 12px; }
+  .grid  { display: grid; gap: 10px; margin-bottom: 14px; }
+  .g4    { grid-template-columns: repeat(4,1fr); }
+  .g5    { grid-template-columns: repeat(5,1fr); }
+  .card  { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
+  .label { color: #8b949e; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+  .value { font-size: 21px; font-weight: 600; }
+  .sub   { color: #8b949e; font-size: 10px; margin-top: 4px; }
+  .green  { color: #3fb950; } .red  { color: #f85149; }
+  .yellow { color: #d29922; } .blue { color: #58a6ff; }
+  .purple { color: #bc8cff; } .white{ color: #e6edf3; }
+  .charts  { display: grid; gap: 10px; margin-bottom: 14px; }
+  .c2  { grid-template-columns: 1fr 1fr; }
+  .c21 { grid-template-columns: 2fr 1fr; }
+  .chart-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
+  .chart-card h2 { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  canvas { max-height: 130px; }
+  .bar  { height: 7px; background: #21262d; border-radius: 4px; margin-top: 5px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+  .dot  { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+  .dot.ok   { background:#3fb950; box-shadow:0 0 6px #3fb950; animation:pulse 2s infinite; }
+  .dot.warn { background:#d29922; }
+  .dot.off  { background:#484f58; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .logs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .log  { background:#161b22; border:1px solid #30363d; border-radius:6px; padding:12px; height:140px; overflow-y:auto; }
+  .log h2 { font-size:10px; color:#8b949e; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+  .entry  { font-size: 11px; line-height: 1.85; color: #8b949e; }
+  .entry span { color: #e6edf3; }
+  .entry.buy  .dir { color: #3fb950; }
+  .entry.sell .dir { color: #f85149; }
+  footer { color: #30363d; font-size: 10px; text-align: right; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>
+  <span class="dot ok" id="dot"></span>PMM Live Dashboard — Pyth SOL/USD
+  &nbsp;&nbsp;<span class="dot off" id="dot-r"></span><span style="color:#8b949e;font-size:11px">reader bot</span>
+</h1>
+
+<!-- ── MM BOT ──────────────────────────────────────────────────────────────── -->
+<div class="section">Market Maker Bot</div>
+
+<div class="grid g4">
+  <div class="card">
+    <div class="label">Oracle Price</div>
+    <div class="value blue" id="price">—</div>
+    <div class="sub" id="price-age">—</div>
+  </div>
+  <div class="card">
+    <div class="label">LP Net PnL</div>
+    <div class="value" id="pnl">—</div>
+    <div class="sub" id="pnl-sub">fee — IL</div>
+  </div>
+  <div class="card">
+    <div class="label">Spread</div>
+    <div class="value yellow" id="spread">—</div>
+    <div class="sub" id="spread-sub">bps</div>
+  </div>
+  <div class="card">
+    <div class="label">Uptime</div>
+    <div class="value white" id="uptime">—</div>
+    <div class="sub" id="oracle-cycles">—</div>
+  </div>
+</div>
+
+<div class="charts c2">
+  <div class="chart-card">
+    <h2>Oracle Price</h2>
+    <canvas id="priceChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>LP PnL bps</h2>
+    <canvas id="pnlChart"></canvas>
+  </div>
+</div>
+
+<div class="grid g4">
+  <div class="card">
+    <div class="label">Reserve A</div>
+    <div class="value white" id="res-a">—</div>
+    <div class="bar"><div class="bar-fill" id="bar-a" style="background:#58a6ff;width:50%"></div></div>
+  </div>
+  <div class="card">
+    <div class="label">Reserve B</div>
+    <div class="value white" id="res-b">—</div>
+    <div class="bar"><div class="bar-fill" id="bar-b" style="background:#3fb950;width:50%"></div></div>
+  </div>
+  <div class="card">
+    <div class="label">Fee A / B</div>
+    <div class="value green" id="fee-a">—</div>
+    <div class="sub" id="fee-b-sub">—</div>
+  </div>
+  <div class="card">
+    <div class="label">MM Swaps</div>
+    <div class="value white" id="swaps">—</div>
+    <div class="sub" id="volume-sub">—</div>
+  </div>
+</div>
+
+<!-- ── READER BOT ──────────────────────────────────────────────────────────── -->
+<div class="section">Reader Bot (momentum ≥1 bps)</div>
+
+<div class="grid g5">
+  <div class="card">
+    <div class="label">Trades</div>
+    <div class="value purple" id="r-trades">—</div>
+    <div class="sub" id="r-last-dir">last: —</div>
+  </div>
+  <div class="card">
+    <div class="label">MtM PnL (B)</div>
+    <div class="value" id="r-pnl-b">—</div>
+    <div class="sub" id="r-pnl-bps">— bps</div>
+  </div>
+  <div class="card">
+    <div class="label">Volume (B)</div>
+    <div class="value white" id="r-volume">—</div>
+    <div class="sub" id="r-spread-paid">spread paid: —</div>
+  </div>
+  <div class="card">
+    <div class="label">Net A / B</div>
+    <div class="value white" id="r-net-a">—</div>
+    <div class="sub" id="r-net-b">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Last move</div>
+    <div class="value yellow" id="r-last-move">—</div>
+    <div class="sub" id="r-last-sig">sig: —</div>
+  </div>
+</div>
+
+<div class="charts c21">
+  <div class="chart-card">
+    <h2>Reader PnL bps (cumulative)</h2>
+    <canvas id="readerPnlChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Trade volume (B)</h2>
+    <canvas id="readerVolChart"></canvas>
+  </div>
+</div>
+
+<!-- ── LOGS ───────────────────────────────────────────────────────────────── -->
+<div class="logs">
+  <div class="log" id="log-mm"><h2>MM Bot — Events</h2></div>
+  <div class="log" id="log-r"><h2>Reader Bot — Trades</h2></div>
+</div>
+
+<footer id="ts">connecting…</footer>
+
+<script>
+const MAX = 120;
+const labels = [], priceData = [], pnlData = [];
+const rLbls  = [], rPnl = [], rVol = [];
+
+// ── MM charts ──────────────────────────────────────────────────────────────────
+const priceChart = new Chart(document.getElementById('priceChart'), {
+  type:'line', data:{ labels, datasets:[{ data:priceData, borderColor:'#58a6ff', borderWidth:1.5, pointRadius:0, tension:.3, fill:true, backgroundColor:'#58a6ff18' }] },
+  options:{ animation:false, responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{ x:{display:false}, y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>'$'+v.toFixed(2)},grid:{color:'#21262d'},border:{color:'#30363d'}} } }
+});
+const pnlChart = new Chart(document.getElementById('pnlChart'), {
+  type:'line', data:{ labels, datasets:[{ data:pnlData, borderColor:'#3fb950', borderWidth:1.5, pointRadius:0, tension:.3, fill:true, backgroundColor:'#3fb95018' }] },
+  options:{ animation:false, responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{ x:{display:false}, y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v+' bps'},grid:{color:'#21262d'},border:{color:'#30363d'}} } }
+});
+
+// ── Reader charts ──────────────────────────────────────────────────────────────
+const readerPnlChart = new Chart(document.getElementById('readerPnlChart'), {
+  type:'line', data:{ labels:rLbls, datasets:[{ data:rPnl, borderColor:'#bc8cff', borderWidth:1.5, pointRadius:0, tension:.3, fill:true, backgroundColor:'#bc8cff18' }] },
+  options:{ animation:false, responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{ x:{display:false}, y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v.toFixed(1)+' bps'},grid:{color:'#21262d'},border:{color:'#30363d'}} } }
+});
+const readerVolChart = new Chart(document.getElementById('readerVolChart'), {
+  type:'bar', data:{ labels:rLbls, datasets:[{ data:rVol, backgroundColor:'#bc8cff44', borderColor:'#bc8cff', borderWidth:1 }] },
+  options:{ animation:false, responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{ x:{display:false}, y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>fmt(v)},grid:{color:'#21262d'},border:{color:'#30363d'}} } }
+});
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function fmt(n){ if(n>=1e9) return (n/1e9).toFixed(2)+'B'; if(n>=1e6) return (n/1e6).toFixed(2)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'K'; return Number(n).toFixed(0); }
+function fmtT(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60; return h?`${h}h ${m}m`:m?`${m}m ${ss}s`:`${ss}s`; }
+function addLog(id, html, cls=''){
+  const el=document.getElementById(id);
+  const d=document.createElement('div'); d.className='entry '+cls;
+  d.innerHTML=`<span>${new Date().toLocaleTimeString()}</span>  ${html}`;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+  while(el.children.length>82) el.removeChild(el.children[1]);
+}
+
+// ── Apply snapshot ─────────────────────────────────────────────────────────────
+let lastPnlBps = null, tick = 0, lastRTrades = 0, rTick = 0;
+
+function applySnap(s) {
+  tick++;
+  const price = s.oracle.price / 1e9;
+  const age   = s.oracle.last_update_age_s;
+  const spread= s.oracle.spread_bps || 0;
+
+  // Oracle / uptime
+  document.getElementById('price').textContent = '$' + price.toFixed(4);
+  document.getElementById('price-age').textContent = `${age}s ago · cycles: ${s.oracle.cycles}`;
+  document.getElementById('uptime').textContent = fmtT(s.uptime_s);
+  document.getElementById('oracle-cycles').textContent = `oracle cycles: ${s.oracle.cycles}`;
+  document.getElementById('spread').textContent = spread + ' bps';
+
+  // Reserves
+  const ra=s.pool.reserve_a, rb=s.pool.reserve_b, tot=ra+rb;
+  document.getElementById('res-a').textContent = fmt(ra);
+  document.getElementById('res-b').textContent = fmt(rb);
+  const pct = tot>0 ? ra/tot*100 : 50;
+  document.getElementById('bar-a').style.width = pct.toFixed(1)+'%';
+  document.getElementById('bar-b').style.width = (100-pct).toFixed(1)+'%';
+  document.getElementById('fee-a').textContent = fmt(s.pool.fee_a);
+  document.getElementById('fee-b-sub').textContent = `fee B: ${fmt(s.pool.fee_b)}`;
+  document.getElementById('swaps').textContent = s.trading.total_swaps;
+  document.getElementById('volume-sub').textContent = `vol B: ${fmt(s.trading.volume_b)}`;
+
+  // LP PnL
+  const pnlBps=s.lp.pnl_bps, ilBps=s.lp.il_bps;
+  const pnlEl=document.getElementById('pnl');
+  pnlEl.textContent=(pnlBps>=0?'+':'')+pnlBps+' bps';
+  pnlEl.className='value '+(pnlBps>0?'green':pnlBps<-10?'red':'yellow');
+  document.getElementById('pnl-sub').textContent=`fee: ${s.lp.fee_income_b.toFixed(0)} B · IL: ${ilBps} bps`;
+
+  // Status dot
+  document.getElementById('dot').className=s.halted?'dot warn':age>20?'dot warn':'dot ok';
+
+  // Charts (every 2 ticks)
+  if(tick%2===0){
+    const t=new Date(s.ts*1000).toLocaleTimeString();
+    labels.push(t); priceData.push(price); pnlData.push(pnlBps);
+    if(labels.length>MAX){labels.shift();priceData.shift();pnlData.shift();}
+    priceChart.update('none'); pnlChart.update('none');
+  }
+  if(lastPnlBps!==null && Math.abs(pnlBps-lastPnlBps)>=1)
+    addLog('log-mm',`pnl: ${lastPnlBps} → ${pnlBps} bps  (il=${ilBps})`);
+  lastPnlBps=pnlBps;
+
+  // ── Reader section ────────────────────────────────────────────────────────
+  const r = s.reader || {};
+  rTick++;
+
+  const rPnlBps = +(r.pnl_bps||0).toFixed(2);
+  const rPnlEl  = document.getElementById('r-pnl-b');
+  rPnlEl.textContent = (r.mtm_pnl_b||0).toFixed(4);
+  rPnlEl.className = 'value '+(rPnlBps>0?'green':rPnlBps<-5?'red':'yellow');
+  document.getElementById('r-trades').textContent  = r.trades||0;
+  document.getElementById('r-last-dir').textContent = 'last: '+(r.last_dir||'—');
+  document.getElementById('r-pnl-bps').textContent  = (rPnlBps>=0?'+':'')+rPnlBps+' bps';
+  document.getElementById('r-volume').textContent   = fmt(r.volume_b||0);
+  document.getElementById('r-spread-paid').textContent = 'spread paid: '+(r.spread_paid_b||0).toFixed(2);
+  document.getElementById('r-net-a').textContent    = (r.net_a||0).toFixed(2);
+  document.getElementById('r-net-b').textContent    = 'net B: '+(r.net_b||0).toFixed(2);
+  document.getElementById('r-last-move').textContent = (r.last_move_bps||0)+' bps';
+  document.getElementById('r-last-sig').textContent  = 'sig: '+(r.last_sig||'—')+'…';
+
+  const trades = r.trades||0;
+  document.getElementById('dot-r').className = trades>0?'dot ok':'dot off';
+
+  // Reader charts (every 2 ticks)
+  if(rTick%2===0){
+    const t=new Date(s.ts*1000).toLocaleTimeString();
+    rLbls.push(t); rPnl.push(rPnlBps); rVol.push(r.volume_b||0);
+    if(rLbls.length>MAX){rLbls.shift();rPnl.shift();rVol.shift();}
+    readerPnlChart.update('none'); readerVolChart.update('none');
+  }
+
+  // Reader trade log: show new trades since last tick
+  if(r.recent && trades > lastRTrades){
+    const newCount = trades - lastRTrades;
+    r.recent.slice(0, newCount).forEach(t=>{
+      const isBuy = t.dir==='B→A';
+      addLog('log-r',
+        `<span class="dir">${t.dir}</span>  in=${fmt(t.amount_in)}  oracle=${(t.oracle/1e9).toFixed(5)}  <span>${t.move_bps}bps</span>  sig=${t.sig}…`,
+        isBuy?'buy':'sell');
+    });
+    lastRTrades = trades;
+  }
+
+  document.getElementById('ts').textContent=`ts: ${new Date(s.ts*1000).toISOString()} · tick #${tick}`;
+}
+
+// ── SSE ────────────────────────────────────────────────────────────────────────
+function connect(){
+  addLog('log-mm','connecting to http://127.0.0.1:19001/feed…');
+  const es=new EventSource('http://127.0.0.1:19001/feed');
+  es.addEventListener('snapshot', e=>{
+    try{ applySnap(JSON.parse(e.data)); }
+    catch(err){ addLog('log-mm','parse error: '+err.message); }
+  });
+  es.onerror=()=>{
+    addLog('log-mm','SSE disconnected — retry in 3s…');
+    document.getElementById('dot').className='dot warn';
+    es.close(); setTimeout(connect,3000);
+  };
+}
+connect();
+</script>
+</body>
+</html>

@@ -15,7 +15,6 @@
 //! BASE_SPREAD_BPS=2 and let the vol signal do the risk management.
 
 use anyhow::{Context, Result};
-use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     hash::Hash,
     instruction::{AccountMeta, Instruction},
@@ -27,7 +26,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     config::Config,
-    cu_budget::send_budgeted,
+    jito, rpc,
     pyth::{fetch_pyth_price, spawn_price_stream, EwmaVol},
     risk::{PoolSnapshot, SharedState},
 };
@@ -49,8 +48,8 @@ impl BlockhashCache {
         }
     }
 
-    fn refresh(&mut self, client: &RpcClient) -> Result<()> {
-        let bh = client.get_latest_blockhash().context("get_latest_blockhash")?;
+    async fn refresh(&mut self, http: &reqwest::Client, url: &str) -> Result<()> {
+        let bh = rpc::get_latest_blockhash(http, url).await.context("get_latest_blockhash")?;
         self.hash       = Some(bh);
         self.fetched_at = Some(Instant::now());
         Ok(())
@@ -63,9 +62,12 @@ impl BlockhashCache {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
-    let client = RpcClient::new(cfg.rpc_url.clone());
-    let http   = reqwest::Client::new();
+pub async fn run(
+    cfg:        Arc<Config>,
+    state:      Arc<SharedState>,
+    mut pool_rx: tokio::sync::watch::Receiver<Option<PoolSnapshot>>,
+) {
+    let http = crate::rpc::make_client();
 
     // ── Seed initial price via HTTP so first TX can go immediately ────────────
     let (price_tx, mut price_rx) = watch::channel::<Option<(u64, u32)>>(None);
@@ -162,22 +164,34 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
         );
 
         // ── Pool snapshot → targets ───────────────────────────────────────────
-        // Save previous reserves for volume delta calculation
+        // Priority: LaserStream > RPC > cached state.pool (stale but usable).
         let prev_reserve_a = state.pool.read().await.reserve_a;
         let prev_reserve_b = state.pool.read().await.reserve_b;
 
-        let pool_data = match client.get_account_data(&cfg.pool_pubkey) {
-            Ok(d)  => d,
-            Err(e) => {
-                handle_failure(&state, &cfg, cycle, format!("pool fetch: {:#}", e)).await;
-                continue;
+        let streamed_snap: Option<PoolSnapshot> = pool_rx.borrow().clone();
+        let snap: PoolSnapshot = if let Some(s) = streamed_snap {
+            s
+        } else {
+            // Try RPC; on failure reuse last known pool state so the oracle
+            // price update still lands (stale reserves just means targets are
+            // slightly wrong, far better than skipping the price update entirely).
+            let pool_result = rpc::get_account_data(&http, &cfg.rpc_url, &cfg.pool_pubkey).await;
+            if let Err(ref e) = pool_result {
+                warn!("[oracle #{}] pool fetch error: {:#}", cycle, e);
             }
-        };
-        let snap = match PoolSnapshot::from_bytes(&pool_data) {
-            Some(s) => s,
-            None    => {
-                handle_failure(&state, &cfg, cycle, "pool data too short".into()).await;
-                continue;
+            match pool_result.ok().and_then(|d| PoolSnapshot::from_bytes(&d))
+            {
+                Some(s) => s,
+                None => {
+                    let cached = state.pool.read().await.clone();
+                    if cached.oracle_price == 0 {
+                        // Truly nothing yet — can't send without any pool context
+                        handle_failure(&state, &cfg, cycle, "pool fetch failed, no cached state".into()).await;
+                        continue;
+                    }
+                    warn!("[oracle #{}] pool RPC failed — using cached state", cycle);
+                    cached
+                }
             }
         };
         *state.pool.write().await = snap.clone();
@@ -185,7 +199,7 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
 
         // ── Build + send ──────────────────────────────────────────────────────
         if bh.needs_refresh() {
-            if let Err(e) = bh.refresh(&client) {
+            if let Err(e) = bh.refresh(&http, &cfg.rpc_url).await {
                 handle_failure(&state, &cfg, cycle, format!("blockhash: {:#}", e)).await;
                 continue;
             }
@@ -199,10 +213,12 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
         };
 
         let ix = build_update_oracle_ix(&cfg, oracle_price, vol_adj, target_a, target_b);
-        match send_budgeted(&client, &[ix], &cfg.wallet, blockhash, cfg.priority_fee_micro_lamports)
-            .context("UPDATE_ORACLE send_budgeted")
+        match jito::send_with_tip(
+            &http, &cfg.rpc_url, &[ix], &cfg.wallet, blockhash,
+            &cfg.jito_endpoint, cfg.jito_tip_lamports, cfg.priority_fee_micro_lamports,
+        ).await.context("UPDATE_ORACLE send")
         {
-            Ok((sig, _cu)) => {
+            Ok(sig) => {
                 let effective_spread = cfg.base_spread_bps
                     .saturating_add(vol_adj)
                     .min(cfg.max_vol_factor);
@@ -243,6 +259,11 @@ async fn handle_failure(state: &SharedState, cfg: &Config, cycle: u64, msg: Stri
     }
     if failures >= cfg.max_consecutive_failures {
         state.halt(&format!("oracle arm: {} consecutive failures", failures));
+    } else {
+        // Exponential backoff: 1s, 2s, 4s, … up to 30s.
+        // Prevents hammering the RPC during transient outages.
+        let backoff_secs = (1u64 << (failures - 1).min(5)).min(30);
+        sleep(Duration::from_secs(backoff_secs)).await;
     }
 }
 

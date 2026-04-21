@@ -105,9 +105,9 @@ impl EwmaVol {
         self.last_price = p;
     }
 
-    /// Returns vol in bps. Returns 4500 (ultra-conservative) during warmup.
+    /// Returns vol in bps. Returns 0 during warmup — conf_bps drives spread until EWMA is ready.
     pub fn vol_bps(&self) -> u32 {
-        if self.n < 5 { return 4500; }
+        if self.n < 5 { return 0; }
         (self.ewma_var.sqrt() * 10_000.0).min(10_000.0) as u32
     }
 }

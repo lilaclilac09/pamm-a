@@ -44,12 +44,16 @@ use std::{str::FromStr, sync::Arc, time::{Duration, Instant}};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
-use crate::{config::Config, risk::SharedState};
+use crate::{config::Config, laserstream::AccountRx, risk::SharedState};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// HumidiFi WSOL-USDC pool account (from Solscan: solscan.io/amm/humidifi).
-const HUMIDIFI_POOL: &str = "FksffEqnBRixYGR791Qw2MgdU7zNCpHVFYBL4Fa4qVuH";
+/// HumidiFi WSOL-USDC pool account (exported so main.rs can create the stream).
+pub const HUMIDIFI_POOL: &str = "FksffEqnBRixYGR791Qw2MgdU7zNCpHVFYBL4Fa4qVuH";
+
+/// Pre-parsed pubkey for use in laserstream::spawn_raw_stream.
+pub static HUMIDIFI_POOL_PUBKEY: std::sync::LazyLock<Pubkey> =
+    std::sync::LazyLock::new(|| Pubkey::from_str(HUMIDIFI_POOL).unwrap());
 
 const WSOL_MINT:  &str = "So11111111111111111111111111111111111111112";
 const USDC_MINT:  &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -89,17 +93,12 @@ struct JupSwapResponse {
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
-pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
+pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>, mut pool_rx: AccountRx) {
     let client = RpcClient::new(cfg.rpc_url.clone());
     let http   = reqwest::Client::builder()
-        .timeout(Duration::from_millis(400))
+        .timeout(Duration::from_millis(800))
         .build()
         .expect("http client");
-
-    let pool_pubkey = match Pubkey::from_str(HUMIDIFI_POOL) {
-        Ok(p) => p,
-        Err(e) => { error!("humidifi_arm: invalid pool pubkey: {}", e); return; }
-    };
 
     info!("humidifi_arm: starting (pool={:.8}, threshold={}bps, size={}SOL)",
         HUMIDIFI_POOL, ARB_THRESHOLD_BPS, TRADE_SIZE_LAMPORTS / 1_000_000_000,
@@ -111,9 +110,24 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
     let mut trades_this_minute: u32 = 0;
     let mut minute_start        = Instant::now();
     let mut cycle: u64          = 0;
+    let mut consecutive_errors: u32 = 0;
 
     loop {
-        sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
+        // ── Wait for HumidiFi pool account to change (event-driven) ──────────
+        // Falls back to POLL_INTERVAL_MS timeout so we don't block forever
+        // if the stream stalls, while still reacting sub-slot when it fires.
+        let backoff_ms = if consecutive_errors == 0 {
+            0u64
+        } else {
+            (POLL_INTERVAL_MS * (1u64 << consecutive_errors.min(7))).min(64_000)
+        };
+        if backoff_ms > 0 { sleep(Duration::from_millis(backoff_ms)).await; }
+
+        // Wait for account notification OR fall through after POLL_INTERVAL_MS
+        let _ = tokio::time::timeout(
+            Duration::from_millis(POLL_INTERVAL_MS),
+            pool_rx.changed(),
+        ).await;
 
         if state.is_halted() {
             sleep(Duration::from_secs(5)).await;
@@ -122,49 +136,40 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
 
         cycle += 1;
 
-        // Reset per-minute counter
         if minute_start.elapsed() > Duration::from_secs(60) {
             trades_this_minute = 0;
             minute_start = Instant::now();
         }
-
-        if last_trade_at.elapsed() < Duration::from_millis(TRADE_COOLDOWN_MS) {
-            continue;
-        }
+        if last_trade_at.elapsed() < Duration::from_millis(TRADE_COOLDOWN_MS) { continue; }
         if trades_this_minute >= MAX_TRADES_PER_MINUTE {
             debug!("[humidifi #{}] rate limit ({}/min)", cycle, trades_this_minute);
             continue;
         }
 
-        // Pyth price from shared state (oracle_arm keeps this current)
         let pyth_price_1e9 = state.pool.read().await.oracle_price;
         if pyth_price_1e9 == 0 {
             debug!("[humidifi #{}] no pyth price yet", cycle);
             continue;
         }
 
-        // ── Pool staleness check (optional signal quality filter) ─────────────
-        // HumidiFi's pool account layout is unknown, so we skip byte parsing.
-        // Instead we rely entirely on Jupiter's execution price as the signal.
-        // If you reverse-engineer their layout later, add a timestamp check here.
-        let _ = pool_pubkey; // pool account fetching reserved for future use
-
-        // ── Check arb, execute if profitable ──────────────────────────────────
         match check_arb_and_execute(cycle, pyth_price_1e9, &http, &client, &cfg).await {
             Ok(Some(profit_bps)) => {
                 info!("[humidifi #{}] executed arb: ~{}bps profit", cycle, profit_bps);
                 trades_this_minute += 1;
                 last_trade_at = Instant::now();
-
-                // Update trade metrics in shared state
+                consecutive_errors = 0;
                 let mut m = state.metrics.write().await;
                 m.trade_cycles += 1;
             }
             Ok(None) => {
+                consecutive_errors = 0;
                 debug!("[humidifi #{}] no arb (pyth={})", cycle, pyth_price_1e9);
             }
             Err(e) => {
-                warn!("[humidifi #{}] error: {:#}", cycle, e);
+                consecutive_errors += 1;
+                if consecutive_errors == 1 || consecutive_errors.is_power_of_two() {
+                    warn!("[humidifi #{}] error (streak={}): {:#}", cycle, consecutive_errors, e);
+                }
             }
         }
     }
@@ -324,11 +329,8 @@ async fn execute_jup_swap(
         tx.signatures[0] = our_sig;
     }
 
-    let legacy: solana_sdk::transaction::Transaction = tx.into_legacy_transaction()
-        .context("humidifi tx is not a legacy transaction — cannot sign directly")?;
-
     let sig = client
-        .send_and_confirm_transaction(&legacy)
+        .send_and_confirm_transaction(&tx)
         .context("send_and_confirm")?;
 
     info!("humidifi_arm: swap confirmed {}", sig);

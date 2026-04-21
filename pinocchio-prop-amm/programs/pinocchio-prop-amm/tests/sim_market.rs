@@ -419,93 +419,114 @@ fn sim_market_30_rounds() {
     assert_eq!(ra0, liq_a, "initial reserve_a mismatch");
     assert_eq!(rb0, liq_b, "initial reserve_b mismatch");
 
-    println!("\n{:<6} {:>14} {:>14} {:>14} {:>14} {:>14} {:>12}",
-        "round", "reserve_a", "reserve_b", "fee_a", "fee_b", "oracle", "arb_dir");
-    println!("{}", "─".repeat(90));
+    println!("\n{:<6} {:>14} {:>14} {:>10} {:>10} {:>14} {:>14} {:>6}",
+        "round", "reserve_a", "reserve_b", "fee_a", "fee_b", "pool_oracle", "market", "arb");
+    println!("{}", "─".repeat(95));
 
     // ── Market simulation: 30 rounds ─────────────────────────────────────────
-    // Simple LCG price series: ±0.5% per step
-    let mut oracle = initial_oracle;
+    //
+    // Two separate prices:
+    //   market_price — external fair price, moves ±0.5% every round
+    //   pool_oracle  — what's written on-chain, updated every 3 rounds (lagged)
+    //
+    // Arb fires when |market - pool_oracle| > spread (10 bps):
+    //   market > pool_oracle → A→B: PMM sells B at stale low price → trader buys cheap
+    //   market < pool_oracle → B→A: PMM sells A at stale high price → trader buys cheap
+    //
+    // Arb condition:
+    //   A→B: pmm_quote_atob(pool_oracle) > fair_b_at_market = amount_a * 1e9 / market
+    //   B→A: pmm_quote_btoa(pool_oracle) > fair_a_at_market = amount_b * market / 1e9
+
+    let mut market_price: u64 = initial_oracle;
+    let mut pool_oracle:  u64 = initial_oracle;
     let mut lcg: u64 = 0xdeadbeef_cafebabe;
+    let mut arb_count: u32 = 0;
+
+    let spread_bps: u32 = 10;
+    let fee_bps:    u32 = 5;
+    let k_param:    u32 = 1000;
 
     for round in 1u32..=30 {
-        // Advance blockhash so each transaction gets a unique signature
         svm.expire_blockhash();
 
-        // Advance oracle price: random walk ±0.3%
+        // External market moves ±0.5% every round
         lcg = lcg.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        let delta_bps: i64 = ((lcg >> 52) as i64 % 60) - 30; // [-30, +30) bps
-        oracle = ((oracle as i128 * (10_000 + delta_bps) as i128 / 10_000) as u64).max(1);
+        let delta_bps: i64 = ((lcg >> 52) as i64 % 100) - 50; // [-50, +50) bps
+        market_price = ((market_price as i128 * (10_000 + delta_bps) as i128 / 10_000) as u64).max(1);
 
-        // UPDATE_ORACLE
+        // Pool oracle updates every 3 rounds (lagged)
         let ra = read_u64(&svm, &pool, OFF_RESERVE_A);
         let rb = read_u64(&svm, &pool, OFF_RESERVE_B);
-        let oracle_tx = Transaction::new(
-            &[&admin],
-            Message::new(
-                &[ix_update_oracle(
-                    pool, admin.pubkey(),
-                    oracle, 10, 0, 1000, 5,
-                    ra, rb,  // targets = current reserves (following inventory)
-                )],
-                Some(&admin.pubkey()),
-            ),
-            svm.latest_blockhash(),
-        );
-        svm.send_transaction(oracle_tx).expect("UPDATE_ORACLE failed");
-
-        // Arb: try to swap 0.5% of reserves if profitable
-        let swap_a = (ra / 200).max(1_000_000); // 0.5% of reserve_a, min 0.001 token
-        let swap_b = (rb / 200).max(1_000_000);
-
-        let mut arb_dir = "none";
-
-        // Check A→B: arb profitable if pool gives more B than oracle implies
-        if let Some(expected_b) = pmm_quote_a_to_b(
-            ra, rb, ra, rb, oracle, 10, 0, 1000, 5, swap_a
-        ) {
-            let oracle_b = (swap_a as u128 * 1_000_000_000 / oracle as u128) as u64;
-            if expected_b > oracle_b {
-                // Arb: swap A for B (trader gets more B than oracle price)
-                let swap_tx = Transaction::new(
-                    &[&trader],
-                    Message::new(
-                        &[ix_swap(
-                            pool, trader_a, vault_a, trader_b, vault_b,
-                            trader.pubkey(), pool_auth,
-                            swap_a, 0, 0, // direction 0 = A→B
-                        )],
-                        Some(&trader.pubkey()),
-                    ),
-                    svm.latest_blockhash(),
-                );
-                if svm.send_transaction(swap_tx).is_ok() {
-                    arb_dir = "A→B";
-                }
-            }
+        if round % 3 == 0 {
+            pool_oracle = market_price;
+            // Patch last_update so staleness check passes
+            let mut acc = svm.get_account(&pool).unwrap();
+            acc.data[128..136].copy_from_slice(&(-1i64).to_le_bytes());
+            svm.set_account(pool, acc).unwrap();
+            let oracle_tx = Transaction::new(
+                &[&admin],
+                Message::new(
+                    &[ix_update_oracle(
+                        pool, admin.pubkey(),
+                        pool_oracle, spread_bps, 0, k_param, fee_bps,
+                        ra, rb,
+                    )],
+                    Some(&admin.pubkey()),
+                ),
+                svm.latest_blockhash(),
+            );
+            svm.send_transaction(oracle_tx).expect("UPDATE_ORACLE failed");
+            svm.expire_blockhash();
         }
 
-        if arb_dir == "none" {
-            // Check B→A
-            if let Some(expected_a) = pmm_quote_b_to_a(
-                ra, rb, ra, rb, oracle, 10, 0, 1000, 5, swap_b
+        // Arb size: 0.5% of pool, but small enough not to drain it
+        let swap_a = (ra / 200).max(1_000_000);
+        let swap_b = (rb / 200).max(1_000_000);
+
+        let mut arb_dir = "—";
+
+        if market_price > pool_oracle {
+            // Pool oracle is stale-low → PMM sells B too cheaply (A→B direction)
+            // PMM quote uses pool_oracle; fair value uses market_price
+            if let Some(pmm_b) = pmm_quote_a_to_b(
+                ra, rb, ra, rb, pool_oracle, spread_bps, 0, k_param, fee_bps, swap_a
             ) {
-                let oracle_a = (swap_b as u128 * oracle as u128 / 1_000_000_000) as u64;
-                if expected_a > oracle_a {
+                let fair_b = (swap_a as u128 * 1_000_000_000 / market_price as u128) as u64;
+                if pmm_b > fair_b {
                     let swap_tx = Transaction::new(
                         &[&trader],
                         Message::new(
-                            &[ix_swap(
-                                pool, trader_b, vault_b, trader_a, vault_a,
-                                trader.pubkey(), pool_auth,
-                                swap_b, 0, 1, // direction 1 = B→A
-                            )],
+                            &[ix_swap(pool, trader_a, vault_a, trader_b, vault_b,
+                                trader.pubkey(), pool_auth, swap_a, 0, 0)],
+                            Some(&trader.pubkey()),
+                        ),
+                        svm.latest_blockhash(),
+                    );
+                    if svm.send_transaction(swap_tx).is_ok() {
+                        arb_dir = "A→B";
+                        arb_count += 1;
+                    }
+                }
+            }
+        } else {
+            // Pool oracle is stale-high → PMM sells A too cheaply (B→A direction)
+            if let Some(pmm_a) = pmm_quote_b_to_a(
+                ra, rb, ra, rb, pool_oracle, spread_bps, 0, k_param, fee_bps, swap_b
+            ) {
+                let fair_a = (swap_b as u128 * market_price as u128 / 1_000_000_000) as u64;
+                if pmm_a > fair_a {
+                    let swap_tx = Transaction::new(
+                        &[&trader],
+                        Message::new(
+                            &[ix_swap(pool, trader_b, vault_b, trader_a, vault_a,
+                                trader.pubkey(), pool_auth, swap_b, 0, 1)],
                             Some(&trader.pubkey()),
                         ),
                         svm.latest_blockhash(),
                     );
                     if svm.send_transaction(swap_tx).is_ok() {
                         arb_dir = "B→A";
+                        arb_count += 1;
                     }
                 }
             }
@@ -516,11 +537,17 @@ fn sim_market_30_rounds() {
         let fa  = read_u64(&svm, &pool, OFF_FEE_A);
         let fb  = read_u64(&svm, &pool, OFF_FEE_B);
 
-        println!("{:<6} {:>14} {:>14} {:>14} {:>14} {:>14} {:>12}",
-            round, ra2, rb2, fa, fb, oracle, arb_dir);
+        // Vault invariant: vault balances must match pool reserves every round
+        let vault_a_bal = token_amount(&svm, &vault_a);
+        let vault_b_bal = token_amount(&svm, &vault_b);
+        assert_eq!(vault_a_bal, ra2, "vault_a != reserve_a at round {round}");
+        assert_eq!(vault_b_bal, rb2, "vault_b != reserve_b at round {round}");
+
+        println!("{:<6} {:>14} {:>14} {:>10} {:>10} {:>14} {:>14} {:>6}",
+            round, ra2, rb2, fa, fb, pool_oracle, market_price, arb_dir);
     }
 
-    println!("{}", "─".repeat(90));
+    println!("{}", "─".repeat(95));
 
     // ── Final assertions ─────────────────────────────────────────────────────
     let ra_final = read_u64(&svm, &pool, OFF_RESERVE_A);
@@ -528,28 +555,27 @@ fn sim_market_30_rounds() {
     let fa_final = read_u64(&svm, &pool, OFF_FEE_A);
     let fb_final = read_u64(&svm, &pool, OFF_FEE_B);
 
-    // Pool should still have reserves (didn't drain)
     assert!(ra_final > 0, "pool drained: reserve_a = 0");
     assert!(rb_final > 0, "pool drained: reserve_b = 0");
+    assert!(arb_count > 0, "no arbs fired in 30 rounds — arb model broken");
+    assert!(fa_final + fb_final > 0, "no fees accumulated despite arbs");
 
-    // Reserve conservation: total value should be within 5% of start
-    // (accounting for arb losses and fees)
     let start_val = liq_a as f64 * initial_oracle as f64 / 1e9 + liq_b as f64;
     let final_oracle = read_u64(&svm, &pool, OFF_ORACLE_PRICE);
     let end_val = ra_final as f64 * final_oracle as f64 / 1e9 + rb_final as f64;
 
-    // Vault balances should match pool reserves (token accounts are ground truth)
+    // Vault invariant already checked per-round; confirm once more at end
     let vault_a_bal = token_amount(&svm, &vault_a);
     let vault_b_bal = token_amount(&svm, &vault_b);
-    // vault includes fees in balance, pool state separates them
     assert_eq!(vault_a_bal, ra_final, "vault_a balance != reserve_a");
     assert_eq!(vault_b_bal, rb_final, "vault_b balance != reserve_b");
 
     println!("\nFinal state:");
-    println!("  reserve_a   = {} (vault_a = {})", ra_final, vault_a_bal);
-    println!("  reserve_b   = {} (vault_b = {})", rb_final, vault_b_bal);
-    println!("  accrued fee_a = {}", fa_final);
-    println!("  accrued fee_b = {}", fb_final);
+    println!("  arbs fired    = {arb_count}/30");
+    println!("  reserve_a     = {ra_final} (vault_a = {vault_a_bal})");
+    println!("  reserve_b     = {rb_final} (vault_b = {vault_b_bal})");
+    println!("  accrued fee_a = {fa_final}");
+    println!("  accrued fee_b = {fb_final}");
     println!("  start_val (B) ≈ {:.0}", start_val);
     println!("  end_val   (B) ≈ {:.0}", end_val);
     println!("  drift bps     = {:.0}", (end_val - start_val) / start_val * 10_000.0);

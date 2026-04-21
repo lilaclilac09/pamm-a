@@ -293,6 +293,71 @@ impl MmBook {
     }
 }
 
+// ── Reader Bot book — updated by reader_arm after every momentum trade ────────
+
+#[derive(Default, Clone)]
+pub struct ReaderTrade {
+    pub cycle:        u64,
+    pub direction:    String,
+    pub amount_in:    u64,
+    pub oracle_price: u64,
+    pub price_move:   u64,
+    pub sig:          String,
+}
+
+/// Tracks momentum-trading PnL: entry oracle price, direction, net position.
+/// All values in token-B units.
+#[derive(Default, Clone)]
+pub struct ReaderBook {
+    pub trades:          Vec<ReaderTrade>,
+    pub net_a:           f64,
+    pub net_b:           f64,
+    pub total_volume_b:  f64,
+    pub last_oracle:     u64,
+    pub spread_paid_b:   f64,
+    pub last_direction:  String,
+    pub last_sig:        String,
+    pub last_move_bps:   u64,
+}
+
+impl ReaderBook {
+    pub fn record(&mut self, t: ReaderTrade) {
+        let oracle = t.oracle_price as f64 / 1e9;
+        match t.direction.as_str() {
+            "B→A" => {
+                self.net_b         -= t.amount_in as f64;
+                self.net_a         += t.amount_in as f64 / oracle;
+                self.total_volume_b += t.amount_in as f64;
+                self.spread_paid_b  += t.amount_in as f64 * 0.0005;
+            }
+            "A→B" => {
+                let b = t.amount_in as f64 * oracle;
+                self.net_a         -= t.amount_in as f64;
+                self.net_b         += b;
+                self.total_volume_b += b;
+                self.spread_paid_b  += b * 0.0005;
+            }
+            _ => {}
+        }
+        self.last_oracle    = t.oracle_price;
+        self.last_direction = t.direction.clone();
+        self.last_move_bps  = t.price_move;
+        self.last_sig       = t.sig[..t.sig.len().min(16)].to_string();
+        self.trades.push(t);
+    }
+
+    pub fn mtm_pnl_b(&self) -> f64 {
+        if self.last_oracle == 0 { return 0.0; }
+        let oracle = self.last_oracle as f64 / 1e9;
+        self.net_b + self.net_a * oracle
+    }
+
+    pub fn pnl_bps(&self) -> f64 {
+        if self.total_volume_b == 0.0 { return 0.0; }
+        self.mtm_pnl_b() / self.total_volume_b * 10_000.0
+    }
+}
+
 // ── Shared state ──────────────────────────────────────────────────────────────
 
 pub struct SharedState {
@@ -319,6 +384,9 @@ pub struct SharedState {
 
     /// MM trading book — updated by trading arm after every Jupiter swap.
     pub mm_book: RwLock<MmBook>,
+
+    /// Reader bot book — updated by reader_arm after every momentum trade.
+    pub reader_book: RwLock<ReaderBook>,
 }
 
 impl SharedState {
@@ -332,6 +400,7 @@ impl SharedState {
             start_balance_lamports: AtomicU64::new(start_balance),
             lp_book:                RwLock::new(LpBook::default()),
             mm_book:                RwLock::new(MmBook::default()),
+            reader_book:            RwLock::new(ReaderBook::default()),
         })
     }
 
