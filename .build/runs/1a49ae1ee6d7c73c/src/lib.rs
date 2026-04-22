@@ -193,3 +193,31 @@ fn write_u64(b: &mut [u8], off: usize, v: u64) {
 }
 
 pub fn get_model_used() -> &'static str { MODEL_USED }
+
+
+#[cfg(not(target_os = "solana"))]
+#[inline]
+fn __prop_amm_after_swap_noop(_data: &[u8], _storage: &mut [u8]) {}
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+pub extern "C" fn __prop_amm_compute_swap_export(data: *const u8, len: usize) -> u64 {
+    prop_amm_submission_sdk::ffi_compute_swap(data, len, compute_swap)
+}
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+pub extern "C" fn __prop_amm_after_swap_export(
+    data: *const u8,
+    data_len: usize,
+    storage: *mut u8,
+    storage_len: usize,
+) {
+    prop_amm_submission_sdk::ffi_after_swap(
+        data,
+        data_len,
+        storage,
+        storage_len,
+        after_swap,
+    );
+}
