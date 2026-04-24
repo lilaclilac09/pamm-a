@@ -11,6 +11,10 @@ path = "src/main.rs"
 name = "sim"
 path = "src/bin/sim.rs"
 
+[[bin]]
+name = "humidifi-probe"
+path = "src/bin/humidifi_probe.rs"
+
 [dependencies]
 solana-sdk    = "1.18"
 solana-client = "1.18"

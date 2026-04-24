@@ -2,9 +2,10 @@
 //!
 //! Each cycle:
 //!   1. Read pool snapshot (oracle price, reserves)
-//!   2. Decide direction via inventory ratio (or alternate if pool is balanced)
+//!   2. Compute inventory ratio and pick direction: only trade when ratio is
+//!      outside the rebalance band. A→B when overweight A, B→A when underweight.
 //!   3. Build and send SWAP instruction directly to the PMM program
-//!   4. Record swap in MmBook for PnL tracking
+//!   4. Re-read pool reserves to measure the actual out_amount and record in MmBook
 
 use anyhow::{Context, Result};
 use solana_client::rpc_client::RpcClient;
@@ -13,7 +14,6 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
     signer::Signer,
-    transaction::Transaction,
 };
 use std::{str::FromStr, sync::Arc, time::Instant};
 use tokio::time::{sleep, Duration};
@@ -22,7 +22,7 @@ use tracing::{info, warn, error};
 use crate::{
     config::Config,
     cu_budget::send_budgeted,
-    risk::SharedState,
+    risk::{SharedState, OFF_RESERVE_A, OFF_RESERVE_B},
 };
 
 const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
@@ -53,11 +53,10 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
     let client = RpcClient::new(cfg.rpc_url.clone());
     let mut bh = BhCache::new();
     let mut cycle: u64 = 0;
-    // Alternate direction each cycle to keep pool balanced
-    let mut direction: u8 = 0; // 0 = A→B, 1 = B→A
 
-    info!("trading_arm: starting (interval={}ms, size={})",
-        cfg.trade_interval_ms, cfg.max_trade_lamports);
+    info!("trading_arm: starting (interval={}ms, size={}, band={:.2}-{:.2})",
+        cfg.trade_interval_ms, cfg.max_trade_lamports,
+        cfg.rebalance_low, cfg.rebalance_high);
 
     loop {
         if state.is_halted() {
@@ -68,12 +67,10 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
 
         cycle += 1;
 
-        match run_cycle(&cfg, &client, &mut bh, &state, direction).await {
+        match run_cycle(&cfg, &client, &mut bh, &state).await {
             Ok(action) => {
                 info!("[trade #{}] {}", cycle, action);
                 state.trade_failures.store(0, std::sync::atomic::Ordering::Relaxed);
-                // Flip direction for next cycle
-                direction = 1 - direction;
 
                 let mut m = state.metrics.write().await;
                 m.trade_cycles = cycle;
@@ -101,7 +98,6 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
                 if failures >= cfg.max_consecutive_failures {
                     warn!("trading arm: {} consecutive failures — resetting counter", failures);
                     state.trade_failures.store(0, std::sync::atomic::Ordering::Relaxed);
-                    // Don't flip direction on error
                 }
             }
         }
@@ -117,7 +113,6 @@ async fn run_cycle(
     client:    &RpcClient,
     bh:        &mut BhCache,
     state:     &SharedState,
-    direction: u8,
 ) -> Result<String> {
     let snap = state.pool.read().await.clone();
     if snap.oracle_price == 0 {
@@ -127,26 +122,36 @@ async fn run_cycle(
         return Ok("skip: pool reserves empty".into());
     }
 
+    // ── Inventory-driven direction ───────────────────────────────────────────
+    // Value both reserves in B-units: value_a = reserve_a * oracle_price / 1e9.
+    // Ratio = value_a / (value_a + value_b). Only trade when outside the band.
+    let value_a = (snap.reserve_a as u128).saturating_mul(snap.oracle_price as u128) / 1_000_000_000u128;
+    let value_b = snap.reserve_b as u128;
+    let total   = value_a + value_b;
+    if total == 0 {
+        return Ok("skip: pool value zero".into());
+    }
+    let ratio = value_a as f64 / total as f64;
+
+    let direction: u8 = if ratio > cfg.rebalance_high {
+        0  // overweight A → sell A for B
+    } else if ratio < cfg.rebalance_low {
+        1  // underweight A → buy A with B
+    } else {
+        return Ok(format!("skip: inventory balanced (ratio={:.3} in [{:.2},{:.2}])",
+            ratio, cfg.rebalance_low, cfg.rebalance_high));
+    };
+
     // Pick trade size and compute expected output from oracle price
-    // direction 0: A→B — send amount_a A tokens, get B out
-    // direction 1: B→A — send amount_b B tokens, get A out
-    //
     // A→B: out_B = amount_a * 1e9 / oracle_price  (oracle_price is A-per-B scaled by 1e9)
     // B→A: out_A = amount_b * oracle_price / 1e9
-    //
-    // We use max_trade_lamports as amount_a (A→B) and a scaled amount for B→A
-    // so each swap is roughly the same value.
     let (amount_in, expected_out) = if direction == 0 {
-        // A→B
         let amount_a = cfg.max_trade_lamports;
         let exp_b = (amount_a as u128 * 1_000_000_000u128)
             .checked_div(snap.oracle_price as u128)
             .unwrap_or(0) as u64;
         (amount_a, exp_b)
     } else {
-        // B→A: send amount_b so it's roughly equivalent value to amount_a
-        // amount_b = amount_a * oracle_price / 1e9 ... but oracle_price is huge (88e9)
-        // that would overflow. Instead use a fixed small amount.
         let amount_b = cfg.max_trade_lamports;
         let exp_a = (amount_b as u128 * snap.oracle_price as u128)
             .checked_div(1_000_000_000u128)
@@ -159,10 +164,10 @@ async fn run_cycle(
     }
 
     // Check we have enough tokens
-    let (user_in_bal, user_in_acc) = if direction == 0 {
-        (get_token_balance(client, &cfg.user_a)?, cfg.user_a)
+    let user_in_bal = if direction == 0 {
+        get_token_balance(client, &cfg.user_a)?
     } else {
-        (get_token_balance(client, &cfg.user_b)?, cfg.user_b)
+        get_token_balance(client, &cfg.user_b)?
     };
 
     if user_in_bal < amount_in {
@@ -179,29 +184,52 @@ async fn run_cycle(
     if bh.stale() { bh.refresh(client)?; }
     let blockhash = bh.get()?;
 
-    let (sig, out_amount) = send_swap(cfg, client, blockhash, direction, amount_in, 0)
+    // Capture the output-side reserve before sending so we can measure actual out.
+    let reserve_out_before = reserve_out;
+
+    let sig = send_swap(cfg, client, blockhash, direction, amount_in, 0)
         .context("SWAP send")?;
 
-    // Record in MmBook
+    // Measure actual out_amount from the on-chain reserve delta.
+    let reserve_out_after = match read_pool_reserve_out(client, &cfg.pool_pubkey, direction) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("trade: post-swap reserve read failed ({:#}) — recording expected_out", e);
+            reserve_out_before.saturating_sub(expected_out)
+        }
+    };
+    let out_amount = reserve_out_before.saturating_sub(reserve_out_after);
+
+    // Record in MmBook (accounts for Jito tip if the bundle used one).
     {
         let oracle_price = snap.oracle_price;
         let mut mm = state.mm_book.write().await;
-        mm.record_swap(direction == 0, amount_in, out_amount, oracle_price, 0);
+        mm.record_swap(direction == 0, amount_in, out_amount, oracle_price, cfg.jito_tip_lamports);
     }
 
-    let spread_bps = if expected_out > 0 && out_amount > 0 {
-        let slippage = (expected_out as i64 - out_amount as i64).abs() as u64;
-        slippage * 10_000 / expected_out
+    // Slippage vs oracle expectation, signed: positive = better than oracle.
+    let slippage_bps = if expected_out > 0 {
+        (out_amount as i64 - expected_out as i64) * 10_000 / expected_out as i64
     } else { 0 };
 
     Ok(format!(
-        "swap: sig={} dir={} in={} out={} spread={}bps",
+        "swap: sig={} dir={} in={} out={} slippage={}bps",
         &sig[..16],
         if direction == 0 { "A→B" } else { "B→A" },
         amount_in,
         out_amount,
-        spread_bps,
+        slippage_bps,
     ))
+}
+
+/// Fetch the current output-side reserve from the pool account.
+fn read_pool_reserve_out(client: &RpcClient, pool: &Pubkey, direction: u8) -> Result<u64> {
+    let data = client.get_account_data(pool).context("get_account_data(pool)")?;
+    let offset = if direction == 0 { OFF_RESERVE_B } else { OFF_RESERVE_A };
+    if data.len() < offset + 8 {
+        anyhow::bail!("pool account too small ({} bytes)", data.len());
+    }
+    Ok(u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap()))
 }
 
 // ── Token balance ─────────────────────────────────────────────────────────────
@@ -230,8 +258,6 @@ fn get_token_balance(client: &RpcClient, token_account: &Pubkey) -> Result<u64> 
 //   [1..9]   amount_in  u64 le
 //   [9..17]  min_out    u64 le
 //   [17]     direction  u8 (0 = A→B, 1 = B→A)
-//
-// Returns (signature, simulated_out_amount)
 
 fn send_swap(
     cfg:       &Config,
@@ -240,7 +266,7 @@ fn send_swap(
     direction: u8,
     amount_in: u64,
     min_out:   u64,
-) -> Result<(String, u64)> {
+) -> Result<String> {
     let token_program = Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap();
 
     let (user_in, vault_in, user_out, vault_out) = if direction == 0 {
@@ -272,10 +298,7 @@ fn send_swap(
 
     let (sig, _) = send_budgeted(client, &[ix], &cfg.wallet, blockhash)
         .context("SWAP send_budgeted")?;
-
-    // Fetch actual out amount from pool state delta would need two RPC calls.
-    // For now return 0; MmBook will record what we can compute from oracle.
-    Ok((sig, 0))
+    Ok(sig)
 }
 
 // ── ADD_LIQUIDITY instruction ──────────────────────────────────────────────────

@@ -1,6 +1,12 @@
-import { Connection, Keypair, PublicKey, VersionedTransaction, TransactionMessage, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { Jupiter } from '@jup-ag/api';
-import { searcherClient } from '@jito-labs/jito-ts';
+import {
+    Connection,
+    Keypair,
+    PublicKey,
+    VersionedTransaction,
+    TransactionMessage,
+    SystemProgram,
+    LAMPORTS_PER_SOL,
+} from '@solana/web3.js';
 import bs58 from 'bs58';
 import dotenv from 'dotenv';
 
@@ -10,150 +16,205 @@ const connection = new Connection(process.env.RPC_URL!, 'confirmed');
 const wallet = Keypair.fromSecretKey(bs58.decode(process.env.PRIVATE_KEY!));
 
 const TARGET_TOKEN = new PublicKey(process.env.TARGET_TOKEN!);
-const BASE_TOKEN = new PublicKey(process.env.BASE_TOKEN!);
+const BASE_TOKEN   = new PublicKey(process.env.BASE_TOKEN!);
 
-const TARGET_RATIO = parseFloat(process.env.TARGET_INVENTORY_RATIO!);
-const MAX_INVENTORY = parseFloat(process.env.MAX_INVENTORY!);
-const MIN_SPREAD = parseFloat(process.env.MIN_SPREAD!);
-const MAX_SPREAD = parseFloat(process.env.MAX_SPREAD!);
-const MAX_DAILY_LOSS = parseFloat(process.env.MAX_DAILY_LOSS!);
-const JITO_TIP = parseFloat(process.env.JITO_TIP!) * LAMPORTS_PER_SOL;
+const TARGET_RATIO    = parseFloat(process.env.TARGET_INVENTORY_RATIO!);
+const MAX_INVENTORY   = parseFloat(process.env.MAX_INVENTORY!);
+const MIN_SPREAD      = parseFloat(process.env.MIN_SPREAD!);
+const MAX_SPREAD      = parseFloat(process.env.MAX_SPREAD!);
+const MAX_DAILY_LOSS  = parseFloat(process.env.MAX_DAILY_LOSS!);
+const JITO_TIP        = parseFloat(process.env.JITO_TIP!) * LAMPORTS_PER_SOL;
+const UPDATE_INTERVAL = parseInt(process.env.UPDATE_INTERVAL!);
+const JITO_TIP_ACCOUNT = new PublicKey(
+    process.env.JITO_TIP_ACCOUNT ?? '96gYZGLnJYVFmbjzopPSU6QiEV5fG3u3Z4M7o7G1z5b',
+);
 
-let currentInventory = 0;
+// Order sizes in lamports (input side). Base is SOL on buy, token on sell.
+const BUY_AMOUNT_LAMPORTS  = Math.floor(
+    parseFloat(process.env.BUY_SIZE_SOL ?? '0.05') * LAMPORTS_PER_SOL,
+);
+const SELL_AMOUNT_UNITS    = parseInt(process.env.SELL_SIZE_UNITS ?? '100000000');
+
+let lastSOLBalance = 0;
 let dailyPnL = 0;
-let lastBalance = 0;
 
 async function main() {
-    console.log("🚀 Jupiter MM Bot（带库存倾斜 + 动态 Spread）启动");
-    console.log(`目标代币: ${TARGET_TOKEN.toBase58().slice(0, 8)}...`);
+    console.log('Jupiter MM bot starting');
+    console.log(`  target: ${TARGET_TOKEN.toBase58().slice(0, 8)}…`);
+    console.log(`  base:   ${BASE_TOKEN.toBase58().slice(0, 8)}…`);
 
-    // 初始化余额
-    lastBalance = await getSOLBalance();
+    lastSOLBalance = await getSOLBalance();
 
     setInterval(async () => {
         try {
             await runMarketMakingCycle();
         } catch (err: any) {
-            console.error("Cycle 出错:", err.message);
+            console.error('cycle error:', err.message);
         }
-    }, parseInt(process.env.UPDATE_INTERVAL!));
+    }, UPDATE_INTERVAL);
 }
 
 async function runMarketMakingCycle() {
-    // 1. 实时库存监控
-    currentInventory = await getTokenBalance(wallet.publicKey, TARGET_TOKEN);
+    const inventory = await getTokenBalance(wallet.publicKey, TARGET_TOKEN);
     const currentSOL = await getSOLBalance();
 
-    // 2. 每日亏损控制
-    dailyPnL = (currentSOL - lastBalance) / lastBalance;
+    dailyPnL = lastSOLBalance > 0 ? (currentSOL - lastSOLBalance) / lastSOLBalance : 0;
     if (dailyPnL < -MAX_DAILY_LOSS) {
-        console.log("❌ 达到每日最大亏损，Bot 已暂停");
+        console.log('daily loss breaker tripped, pausing cycle');
         return;
     }
 
-    // 3. 获取中间价
     const midPrice = await getMidPrice();
-
-    // 4. 计算动态 Spread + 库存倾斜
-    const spread = calculateDynamicSpread(currentInventory);
-
-    const bidPrice = midPrice * (1 - spread / 2);   // 买入价
-    const askPrice = midPrice * (1 + spread / 2);   // 卖出价
-
-    console.log(`库存: ${currentInventory.toFixed(2)} | Spread: ${(spread*100).toFixed(2)}% | Bid: ${bidPrice.toFixed(6)} | Ask: ${askPrice.toFixed(6)}`);
-
-    // 5. 执行做市
-    if (currentInventory < MAX_INVENTORY * 0.75) {
-        await executeTrade(true, bidPrice);   // 买入
-    }
-    if (currentInventory > MAX_INVENTORY * 0.35) {
-        await executeTrade(false, askPrice);  // 卖出
+    if (!midPrice) {
+        console.log('mid price unavailable, skipping');
+        return;
     }
 
-    lastBalance = currentSOL;
+    const spread = calculateDynamicSpread(inventory);
+    const bidPrice = midPrice * (1 - spread / 2);
+    const askPrice = midPrice * (1 + spread / 2);
+
+    console.log(
+        `inv=${inventory.toFixed(2)} mid=${midPrice.toFixed(8)} ` +
+        `spread=${(spread * 100).toFixed(2)}% bid=${bidPrice.toFixed(8)} ask=${askPrice.toFixed(8)}`,
+    );
+
+    if (inventory < MAX_INVENTORY * 0.75) {
+        await executeTrade(true, bidPrice);
+    }
+    if (inventory > MAX_INVENTORY * 0.35) {
+        await executeTrade(false, askPrice);
+    }
+
+    lastSOLBalance = currentSOL;
 }
 
-// ==================== 动态 Spread + 库存倾斜 ====================
 function calculateDynamicSpread(inventory: number): number {
     const ratio = inventory / MAX_INVENTORY;
     let spread = MIN_SPREAD;
 
-    // 库存倾斜逻辑（核心）
     if (ratio > TARGET_RATIO + 0.18) {
-        spread += 0.009;                    // 库存太多 → 扩大 spread，鼓励卖出
+        spread += 0.009;                                       // overweight → widen to push sells
     } else if (ratio < TARGET_RATIO - 0.18) {
-        spread = Math.max(MIN_SPREAD, spread - 0.004); // 库存太少 → 收紧 spread，鼓励买入
+        spread = Math.max(MIN_SPREAD, spread - 0.004);          // underweight → tighten to attract buys
     }
-
-    // 简单波动率模拟（可替换为 Pyth 实时数据）
-    const volatility = 1.0 + Math.random() * 0.6;
-    spread *= volatility;
 
     return Math.min(MAX_SPREAD, Math.max(MIN_SPREAD, spread));
 }
 
-// ==================== 执行交易（Jito Bundle） ====================
-async function executeTrade(isBuy: boolean, price: number) {
+// ── Jupiter v6 REST ──────────────────────────────────────────────────────────
+
+async function jupiterQuote(
+    inputMint: PublicKey,
+    outputMint: PublicKey,
+    amount: number,
+): Promise<any> {
+    const url =
+        `https://quote-api.jup.ag/v6/quote` +
+        `?inputMint=${inputMint.toBase58()}` +
+        `&outputMint=${outputMint.toBase58()}` +
+        `&amount=${amount}` +
+        `&slippageBps=80`;
+
+    const resp = await fetch(url);
+    if (!resp.ok) {
+        throw new Error(`jupiter quote ${resp.status}: ${await resp.text()}`);
+    }
+    return resp.json();
+}
+
+async function jupiterSwapTx(quote: any): Promise<VersionedTransaction> {
+    const resp = await fetch('https://quote-api.jup.ag/v6/swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            quoteResponse: quote,
+            userPublicKey: wallet.publicKey.toBase58(),
+            wrapAndUnwrapSol: true,
+            dynamicComputeUnitLimit: true,
+            prioritizationFeeLamports: 'auto',
+        }),
+    });
+    if (!resp.ok) {
+        throw new Error(`jupiter swap ${resp.status}: ${await resp.text()}`);
+    }
+    const { swapTransaction } = (await resp.json()) as { swapTransaction: string };
+    return VersionedTransaction.deserialize(Buffer.from(swapTransaction, 'base64'));
+}
+
+async function executeTrade(isBuy: boolean, _price: number) {
     try {
-        const jupiter = await Jupiter.load({ connection });
+        const inputMint  = isBuy ? BASE_TOKEN   : TARGET_TOKEN;
+        const outputMint = isBuy ? TARGET_TOKEN : BASE_TOKEN;
+        const amount = isBuy ? BUY_AMOUNT_LAMPORTS : SELL_AMOUNT_UNITS;
 
-        const routes = await jupiter.computeRoutes({
-            inputMint: isBuy ? BASE_TOKEN : TARGET_TOKEN,
-            outputMint: isBuy ? TARGET_TOKEN : BASE_TOKEN,
-            amount: isBuy ? 50000000 : 100000000, // 0.05 SOL 或 0.1 token
-            slippageBps: 80,
-        });
+        const quote  = await jupiterQuote(inputMint, outputMint, amount);
+        const swapTx = await jupiterSwapTx(quote);
+        swapTx.sign([wallet]);
 
-        if (!routes.routesInfos || routes.routesInfos.length === 0) return;
-
-        const { swapTransaction } = await jupiter.swap({
-            routeInfo: routes.routesInfos[0],
-            userPublicKey: wallet.publicKey,
-        });
-
-        const tx = VersionedTransaction.deserialize(swapTransaction);
-
-        // 添加 Jito Tip（放在最后一笔）
-        const tipIx = SystemProgram.transfer({
-            fromPubkey: wallet.publicKey,
-            toPubkey: new PublicKey("96gYZGLnJYVFmbjzopPSU6QiEV5fG3u3Z4M7o7G1z5b"),
-            lamports: JITO_TIP,
-        });
-
+        const { blockhash } = await connection.getLatestBlockhash();
         const tipTx = new VersionedTransaction(
             new TransactionMessage({
                 payerKey: wallet.publicKey,
-                recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
-                instructions: [tipIx],
-            }).compileToV0Message()
+                recentBlockhash: blockhash,
+                instructions: [
+                    SystemProgram.transfer({
+                        fromPubkey: wallet.publicKey,
+                        toPubkey: JITO_TIP_ACCOUNT,
+                        lamports: JITO_TIP,
+                    }),
+                ],
+            }).compileToV0Message(),
         );
         tipTx.sign([wallet]);
 
-        const bundle = [tx, tipTx];
+        const bundle = [swapTx, tipTx].map(tx =>
+            Buffer.from(tx.serialize()).toString('base64'),
+        );
 
-        const client = searcherClient("https://ny.mainnet.block-engine.jito.wtf");
-        await client.sendBundle(bundle);
+        const jitoResp = await fetch(
+            'https://ny.mainnet.block-engine.jito.wtf/api/v1/bundles',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'sendBundle',
+                    params: [bundle],
+                }),
+            },
+        );
+        if (!jitoResp.ok) {
+            throw new Error(`jito bundle ${jitoResp.status}: ${await jitoResp.text()}`);
+        }
 
-        console.log(`✅ ${isBuy ? "买入" : "卖出"} Bundle 发送成功 | 价格 ≈ ${price.toFixed(6)}`);
+        console.log(`${isBuy ? 'buy' : 'sell'} bundle sent, out=${quote.outAmount}`);
     } catch (err: any) {
-        console.error("交易失败:", err.message);
+        console.error('trade failed:', err.message);
     }
 }
 
-// 辅助函数
+// ── On-chain reads ───────────────────────────────────────────────────────────
+
 async function getTokenBalance(owner: PublicKey, mint: PublicKey): Promise<number> {
-    // 实际项目中需要完整实现，这里用随机数模拟
-    return Math.random() * MAX_INVENTORY * 0.9;
+    const accs = await connection.getParsedTokenAccountsByOwner(owner, { mint });
+    if (accs.value.length === 0) return 0;
+    return accs.value[0].account.data.parsed.info.tokenAmount.uiAmount ?? 0;
 }
 
 async function getSOLBalance(): Promise<number> {
-    const balance = await connection.getBalance(wallet.publicKey);
-    return balance / LAMPORTS_PER_SOL;
+    const lamports = await connection.getBalance(wallet.publicKey);
+    return lamports / LAMPORTS_PER_SOL;
 }
 
+/// Mid price as TARGET-per-BASE, derived from a 1-unit quote through Jupiter.
 async function getMidPrice(): Promise<number> {
-    // 实际从 Jupiter 获取，这里简化
-    return 0.00001234;
+    const probe = LAMPORTS_PER_SOL;           // 1 SOL (or 10^9 units of BASE) as probe
+    const quote = await jupiterQuote(BASE_TOKEN, TARGET_TOKEN, probe);
+    const outAmount = Number(quote.outAmount);
+    if (!outAmount) return 0;
+    return probe / outAmount;                  // TARGET per BASE unit
 }
 
 main().catch(console.error);
