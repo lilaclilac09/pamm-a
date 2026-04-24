@@ -36,14 +36,22 @@ const USDC_MINT:  &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDC_DECIMALS_FACTOR: u128 = 1_000_000;          // 1 USDC = 10^6 units
 const SOL_DECIMALS_FACTOR:  u128 = 1_000_000_000;      // 1 SOL  = 10^9 lamports
 
-/// Minimum price divergence to trade (bps).
-///
-/// Grounded in Jump Crypto's DFBA research (jumpcrypto.com/writing/dual-flow-batch-auction):
-/// Expected latency drift per 400ms slot = vol_bps * sqrt(slot_ms / year_ms)
-/// For SOL (annualised vol ~80%): ≈ 0.90 bps/slot.
-/// Set threshold at 3x noise floor = ~3bps to filter spurious quotes.
-/// Jupiter's fee overhead on HumidiFi routes is ~2-3bps, so effective min is 5bps.
-const ARB_THRESHOLD_BPS: u64 = 5;
+/// Minimum *net* price divergence to trade (bps), measured after the on-chain
+/// cost buffer below. Grounded in Jump Crypto's DFBA research:
+/// expected latency drift per 400ms slot ≈ vol_bps * sqrt(slot_ms / year_ms),
+/// which is ~0.9bps for SOL at 80% annualised vol. 5bps net = ~5x noise.
+const ARB_THRESHOLD_BPS: i64 = 5;
+
+/// On-chain cost buffer added to the threshold when comparing edge.
+/// Covers Jupiter's tip on the route (~1bps), our priority fee (max 500_000
+/// lamports ≈ 1bps on a 5-SOL trade), and ~5_000-lamport network fee.
+const FEE_BUFFER_BPS: i64 = 2;
+
+/// Pyth-freshness window: HumidiFi's on-chain oracle catches up 80–200ms after
+/// Pyth moves. We only attempt arb within this window after a Pyth tick, since
+/// outside it HumidiFi's pool is already in agreement (and quote calls just
+/// burn rate-limit / RPC budget).
+const PYTH_FRESH_WINDOW_MS: u128 = 250;
 
 /// Notional per trade (SOL lamports).
 ///
@@ -78,8 +86,8 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
         .build()
         .expect("http client");
 
-    info!("humidifi_arm: starting (threshold={}bps, size={}SOL)",
-        ARB_THRESHOLD_BPS, TRADE_SIZE_LAMPORTS / 1_000_000_000,
+    info!("humidifi_arm: starting (net-threshold={}bps + fee-buffer={}bps, size={}SOL, fresh-window={}ms)",
+        ARB_THRESHOLD_BPS, FEE_BUFFER_BPS, TRADE_SIZE_LAMPORTS / 1_000_000_000, PYTH_FRESH_WINDOW_MS,
     );
 
     let mut last_trade_at       = Instant::now()
@@ -88,6 +96,10 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
     let mut trades_this_minute: u32 = 0;
     let mut minute_start        = Instant::now();
     let mut cycle: u64          = 0;
+
+    // Track the most recent Pyth price change to gate cycles by freshness.
+    let mut last_pyth_price: u64        = 0;
+    let mut last_pyth_change_at: Option<Instant> = None;
 
     loop {
         sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
@@ -118,6 +130,22 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
         if pyth_price_1e9 == 0 {
             debug!("[humidifi #{}] no pyth price yet", cycle);
             continue;
+        }
+
+        // ── Pyth-freshness gate ───────────────────────────────────────────────
+        // HumidiFi pool layout is closed-source so we can't read their oracle
+        // staleness directly. Use Pyth-side freshness as a proxy: if the price
+        // we have just changed, HumidiFi is mid-catch-up and the window is open.
+        if pyth_price_1e9 != last_pyth_price {
+            last_pyth_price = pyth_price_1e9;
+            last_pyth_change_at = Some(Instant::now());
+        }
+        match last_pyth_change_at {
+            Some(t) if t.elapsed().as_millis() <= PYTH_FRESH_WINDOW_MS => {}
+            _ => {
+                debug!("[humidifi #{}] pyth stale → window closed, skipping", cycle);
+                continue;
+            }
         }
 
         // ── Check arb, execute if profitable ──────────────────────────────────
@@ -160,16 +188,17 @@ async fn check_arb_and_execute(
                           / (pyth_price_1e9 as u128)
                           / USDC_DECIMALS_FACTOR) as u64;
     let buy_edge_bps   = edge_bps(buy_out_sol, fair_out_sol);
+    let gross_threshold = ARB_THRESHOLD_BPS + FEE_BUFFER_BPS;
 
-    debug!("[humidifi #{}] buy: out={} fair={} edge={}bps",
-        cycle, buy_out_sol, fair_out_sol, buy_edge_bps);
+    debug!("[humidifi #{}] buy: out={} fair={} edge={}bps (need ≥{}bps gross)",
+        cycle, buy_out_sol, fair_out_sol, buy_edge_bps, gross_threshold);
 
-    if buy_edge_bps >= ARB_THRESHOLD_BPS as i64 {
-        let profit_bps = buy_edge_bps as u64;
-        info!("[humidifi #{}] BUY SOL arb: +{}bps (humidifi cheap)", cycle, profit_bps);
+    if buy_edge_bps >= gross_threshold {
+        let net_profit_bps = (buy_edge_bps - FEE_BUFFER_BPS) as u64;
+        info!("[humidifi #{}] BUY SOL arb: +{}bps net (humidifi cheap)", cycle, net_profit_bps);
         execute_jup_swap(http, client, cfg, &buy_quote).await
             .context("execute buy SOL")?;
-        return Ok(Some(profit_bps));
+        return Ok(Some(net_profit_bps));
     }
 
     // ── Direction B: sell SOL to HumidiFi (WSOL → USDC)
@@ -182,15 +211,15 @@ async fn check_arb_and_execute(
                           / SOL_DECIMALS_FACTOR) as u64;
     let sell_edge_bps  = edge_bps(sell_out_usdc, fair_out_usdc);
 
-    debug!("[humidifi #{}] sell: out={} fair={} edge={}bps",
-        cycle, sell_out_usdc, fair_out_usdc, sell_edge_bps);
+    debug!("[humidifi #{}] sell: out={} fair={} edge={}bps (need ≥{}bps gross)",
+        cycle, sell_out_usdc, fair_out_usdc, sell_edge_bps, gross_threshold);
 
-    if sell_edge_bps >= ARB_THRESHOLD_BPS as i64 {
-        let profit_bps = sell_edge_bps as u64;
-        info!("[humidifi #{}] SELL SOL arb: +{}bps (humidifi expensive)", cycle, profit_bps);
+    if sell_edge_bps >= gross_threshold {
+        let net_profit_bps = (sell_edge_bps - FEE_BUFFER_BPS) as u64;
+        info!("[humidifi #{}] SELL SOL arb: +{}bps net (humidifi expensive)", cycle, net_profit_bps);
         execute_jup_swap(http, client, cfg, &sell_quote).await
             .context("execute sell SOL")?;
-        return Ok(Some(profit_bps));
+        return Ok(Some(net_profit_bps));
     }
 
     Ok(None)
