@@ -4,55 +4,37 @@
 //! ~80-200ms. Between Pyth moving and HumidiFi catching up, their pool is
 //! mispriced. We trade against it via Jupiter (which routes through HumidiFi).
 //!
-//! Architecture:
-//!   1. Every slot (~400ms): poll HumidiFi's SOL/USDC pool account via RPC.
-//!      Parse their last_oracle_update timestamp to detect staleness.
-//!   2. On each poll: request a Jupiter quote forced through HumidiFi.
-//!   3. Compare Jupiter's execution price vs Pyth price (from SharedState).
-//!   4. If delta > ARB_THRESHOLD_BPS: execute the swap via Jupiter.
+//! Detection: request a Jupiter quote forced through HumidiFi, then compare
+//! the quote's `outAmount` against the fair output computed from Pyth. If
+//! we'd receive more than fair by `ARB_THRESHOLD_BPS`, fire the swap.
+//! `outAmount` already reflects HumidiFi's pool math (fees + price impact),
+//! so the comparison is end-to-end honest.
 //!
 //! Why Jupiter instead of direct HumidiFi CPI?
 //!   HumidiFi's swap instruction layout is proprietary/obfuscated. Jupiter
 //!   integrates them and handles all instruction construction. We force the
 //!   route via `dexes[]=Humidifi` in the quote request.
-//!
-//!                    ┌─────────────────────────────────────┐
-//!   DATA FLOW:       │                                     │
-//!                    │  oracle_arm keeps SharedState fresh  │
-//!                    │  oracle_price = Pyth SOL/USDC price  │
-//!                    └─────────────────────────────────────┘
-//!                                      │
-//!   every 400ms                        ▼
-//!   poll RPC ──► HumidiFi pool ──► staleness check
-//!                                      │
-//!                                 Jupiter quote
-//!                                 (HumidiFi only)
-//!                                      │
-//!                              exec_price vs pyth_price
-//!                                      │
-//!                          delta > threshold? ──► execute swap
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    pubkey::Pubkey,
     signer::Signer,
     transaction::VersionedTransaction,
 };
-use std::{str::FromStr, sync::Arc, time::{Duration, Instant}};
+use std::{sync::Arc, time::{Duration, Instant}};
 use tokio::time::sleep;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{config::Config, risk::SharedState};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// HumidiFi WSOL-USDC pool account (from Solscan: solscan.io/amm/humidifi).
-const HUMIDIFI_POOL: &str = "FksffEqnBRixYGR791Qw2MgdU7zNCpHVFYBL4Fa4qVuH";
-
 const WSOL_MINT:  &str = "So11111111111111111111111111111111111111112";
 const USDC_MINT:  &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+const USDC_DECIMALS_FACTOR: u128 = 1_000_000;          // 1 USDC = 10^6 units
+const SOL_DECIMALS_FACTOR:  u128 = 1_000_000_000;      // 1 SOL  = 10^9 lamports
 
 /// Minimum price divergence to trade (bps).
 ///
@@ -96,13 +78,8 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
         .build()
         .expect("http client");
 
-    let pool_pubkey = match Pubkey::from_str(HUMIDIFI_POOL) {
-        Ok(p) => p,
-        Err(e) => { error!("humidifi_arm: invalid pool pubkey: {}", e); return; }
-    };
-
-    info!("humidifi_arm: starting (pool={:.8}, threshold={}bps, size={}SOL)",
-        HUMIDIFI_POOL, ARB_THRESHOLD_BPS, TRADE_SIZE_LAMPORTS / 1_000_000_000,
+    info!("humidifi_arm: starting (threshold={}bps, size={}SOL)",
+        ARB_THRESHOLD_BPS, TRADE_SIZE_LAMPORTS / 1_000_000_000,
     );
 
     let mut last_trade_at       = Instant::now()
@@ -143,12 +120,6 @@ pub async fn run(cfg: Arc<Config>, state: Arc<SharedState>) {
             continue;
         }
 
-        // ── Pool staleness check (optional signal quality filter) ─────────────
-        // HumidiFi's pool account layout is unknown, so we skip byte parsing.
-        // Instead we rely entirely on Jupiter's execution price as the signal.
-        // If you reverse-engineer their layout later, add a timestamp check here.
-        let _ = pool_pubkey; // pool account fetching reserved for future use
-
         // ── Check arb, execute if profitable ──────────────────────────────────
         match check_arb_and_execute(cycle, pyth_price_1e9, &http, &client, &cfg).await {
             Ok(Some(profit_bps)) => {
@@ -180,14 +151,21 @@ async fn check_arb_and_execute(
     cfg:            &Arc<Config>,
 ) -> Result<Option<u64>> {
     // ── Direction A: buy SOL from HumidiFi (USDC → WSOL)
-    // If HumidiFi is selling SOL cheap relative to Pyth → buy.
-    let usdc_in = usdc_for_sol(TRADE_SIZE_LAMPORTS, pyth_price_1e9);
-    let (buy_quote, buy_bps) = jupiter_quote(http, USDC_MINT, WSOL_MINT, usdc_in).await?;
+    // Fair output for `usdc_in` USDC at Pyth price = usdc_in (6dec) * 1e9 / pyth_price_1e9 → SOL lamports
+    let usdc_in        = usdc_for_sol(TRADE_SIZE_LAMPORTS, pyth_price_1e9);
+    let (buy_quote, buy_out_sol) =
+        jupiter_quote(http, USDC_MINT, WSOL_MINT, usdc_in).await?;
+    let fair_out_sol   = ((usdc_in as u128) * SOL_DECIMALS_FACTOR
+                          * SOL_DECIMALS_FACTOR
+                          / (pyth_price_1e9 as u128)
+                          / USDC_DECIMALS_FACTOR) as u64;
+    let buy_edge_bps   = edge_bps(buy_out_sol, fair_out_sol);
 
-    // buy_bps < 10_000 means we received MORE SOL per USDC than Pyth fair value.
-    // Equivalently: HumidiFi SOL price < Pyth price.
-    if 10_000u64.saturating_sub(buy_bps) >= ARB_THRESHOLD_BPS {
-        let profit_bps = 10_000 - buy_bps;
+    debug!("[humidifi #{}] buy: out={} fair={} edge={}bps",
+        cycle, buy_out_sol, fair_out_sol, buy_edge_bps);
+
+    if buy_edge_bps >= ARB_THRESHOLD_BPS as i64 {
+        let profit_bps = buy_edge_bps as u64;
         info!("[humidifi #{}] BUY SOL arb: +{}bps (humidifi cheap)", cycle, profit_bps);
         execute_jup_swap(http, client, cfg, &buy_quote).await
             .context("execute buy SOL")?;
@@ -195,13 +173,20 @@ async fn check_arb_and_execute(
     }
 
     // ── Direction B: sell SOL to HumidiFi (WSOL → USDC)
-    // If HumidiFi is buying SOL expensive relative to Pyth → sell.
-    let (sell_quote, sell_bps) = jupiter_quote(http, WSOL_MINT, USDC_MINT, TRADE_SIZE_LAMPORTS).await?;
+    // Fair output for TRADE_SIZE_LAMPORTS lamports = sol * pyth_price_1e9 / 1e9 → USDC (6dec via /1e3)
+    let (sell_quote, sell_out_usdc) =
+        jupiter_quote(http, WSOL_MINT, USDC_MINT, TRADE_SIZE_LAMPORTS).await?;
+    let fair_out_usdc  = ((TRADE_SIZE_LAMPORTS as u128) * (pyth_price_1e9 as u128)
+                          * USDC_DECIMALS_FACTOR
+                          / SOL_DECIMALS_FACTOR
+                          / SOL_DECIMALS_FACTOR) as u64;
+    let sell_edge_bps  = edge_bps(sell_out_usdc, fair_out_usdc);
 
-    // sell_bps > 10_000 means we received MORE USDC per SOL than Pyth fair value.
-    // Equivalently: HumidiFi SOL price > Pyth price.
-    if sell_bps.saturating_sub(10_000) >= ARB_THRESHOLD_BPS {
-        let profit_bps = sell_bps - 10_000;
+    debug!("[humidifi #{}] sell: out={} fair={} edge={}bps",
+        cycle, sell_out_usdc, fair_out_usdc, sell_edge_bps);
+
+    if sell_edge_bps >= ARB_THRESHOLD_BPS as i64 {
+        let profit_bps = sell_edge_bps as u64;
         info!("[humidifi #{}] SELL SOL arb: +{}bps (humidifi expensive)", cycle, profit_bps);
         execute_jup_swap(http, client, cfg, &sell_quote).await
             .context("execute sell SOL")?;
@@ -211,19 +196,17 @@ async fn check_arb_and_execute(
     Ok(None)
 }
 
+/// Edge in basis points: how much `actual_out` beats `fair_out` (negative if it loses).
+fn edge_bps(actual_out: u64, fair_out: u64) -> i64 {
+    if fair_out == 0 { return i64::MIN; }
+    ((actual_out as i128 - fair_out as i128) * 10_000 / fair_out as i128) as i64
+}
+
 // ── Jupiter quote (HumidiFi route only) ──────────────────────────────────────
 //
-// Returns (raw quote JSON, exec_price_bps).
-//
-// exec_price_bps is the price you actually got as a fraction of fair value,
-// in basis points where 10_000 = exactly fair (Pyth price).
-//
-//   > 10_000: you got better than fair (sell direction arb)
-//   < 10_000: you paid less than fair (buy direction arb)
-//
-// We derive this from Jupiter's priceImpactPct:
-//   A negative impact means the pool is mispriced IN YOUR FAVOR.
-//   Positive impact = you moved the price against yourself (normal).
+// Returns (raw quote JSON, out_amount). `out_amount` is what the route would
+// actually pay — already net of HumidiFi's pool fees and price impact, so the
+// caller can compare it directly against an oracle-derived fair value.
 
 async fn jupiter_quote(
     http:        &reqwest::Client,
@@ -266,21 +249,12 @@ async fn jupiter_quote(
         anyhow::bail!("not routed through HumidiFi (got: {:?})", labels);
     }
 
-    // priceImpactPct: positive = you moved price against yourself (normal trade)
-    //                 negative = pool is mispriced in your favor (arb!)
-    let impact_pct: f64 = raw["priceImpactPct"]
+    let out_amount: u64 = raw["outAmount"]
         .as_str()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(0.0);
+        .ok_or_else(|| anyhow::anyhow!("quote missing outAmount"))?;
 
-    // Convert to basis points, flipped so that arb opportunity = value > 10_000
-    let impact_bps = (impact_pct * 100.0) as i64;
-    let exec_bps = (10_000i64 - impact_bps).clamp(0, 30_000) as u64;
-
-    debug!("jup quote {}->{}: amount={} impact={:.4}% exec_bps={}",
-        &input_mint[..6], &output_mint[..6], amount, impact_pct, exec_bps);
-
-    Ok((raw, exec_bps))
+    Ok((raw, out_amount))
 }
 
 // ── Execute Jupiter swap ──────────────────────────────────────────────────────
@@ -318,20 +292,20 @@ async fn execute_jup_swap(
     let mut tx: VersionedTransaction =
         bincode::deserialize(&tx_bytes).context("deserialise VersionedTx")?;
 
-    // Sign: Jupiter returns a partially-signed tx, add our signature at slot 0
+    // Jupiter returns the tx pre-shaped for us as the fee payer at signature slot 0.
+    // Sign the serialized message and place our signature at slot 0; preserve any
+    // additional signatures Jupiter included (e.g. ephemeral session keys).
     let our_sig = cfg.wallet.sign_message(&tx.message.serialize());
-    if !tx.signatures.is_empty() {
-        tx.signatures[0] = our_sig;
+    if tx.signatures.is_empty() {
+        anyhow::bail!("jupiter swap tx has no signature slots");
     }
-
-    let legacy: solana_sdk::transaction::Transaction = tx.into_legacy_transaction()
-        .context("humidifi tx is not a legacy transaction — cannot sign directly")?;
+    tx.signatures[0] = our_sig;
 
     let sig = client
-        .send_and_confirm_transaction(&legacy)
-        .context("send_and_confirm")?;
+        .send_transaction(&tx)
+        .context("send_transaction")?;
 
-    info!("humidifi_arm: swap confirmed {}", sig);
+    info!("humidifi_arm: swap submitted {}", sig);
     Ok(())
 }
 
