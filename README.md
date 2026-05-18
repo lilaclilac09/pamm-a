@@ -2,6 +2,8 @@
 
 Research and implementation sandbox for prop AMM, market making, and simulation on Solana.
 
+Live risk terminal: **[pamm.aileena.xyz](https://pamm.aileena.xyz)** — fee model trace, reader bot PnL, circuit breaker signals. Sim mode runs without any bot.
+
 ---
 
 ## What's here
@@ -25,7 +27,7 @@ Research and implementation sandbox for prop AMM, market making, and simulation 
 
 1. [`src/lib.rs`](src/lib.rs) — the competition strategy: EWMA vol + shock-decay fee model
 2. [`pinocchio-prop-amm/README.md`](pinocchio-prop-amm/README.md) — end-to-end reference: on-chain program, Jito bot, admin scripts, 16 tests
-3. [`visualization/terminal.html`](visualization/terminal.html) — open in browser: live risk cockpit with fee model trace, reader bot PnL, signal badges. Sim mode runs without any bot.
+3. **[pamm.aileena.xyz](https://pamm.aileena.xyz)** — live risk cockpit: fee model trace, reader bot PnL, signal badges. Sim mode runs without any bot. ([source](visualization/terminal.html))
 
 ---
 
