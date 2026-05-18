@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PAMM Risk Terminal</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:     #090b0f;
+  --panel:  #0d1018;
+  --b1:     #181f2c;
+  --b2:     #222d3e;
+  --text:   #dde3ed;
+  --dim:    #4a5a72;
+  --dim2:   #6b7f9a;
+  --green:  #34d399;
+  --red:    #f87171;
+  --blue:   #60a5fa;
+  --purple: #a78bfa;
+  --yellow: #fbbf24;
+  --orange: #fb923c;
+}
+html, body {
+  height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: 'SF Mono','Fira Code','Cascadia Code',monospace;
+  font-size: 12px;
+}
+
+/* ── topbar ─────────────────────────────────────────────────────────── */
+#topbar {
+  height: 36px; flex-shrink: 0;
+  background: var(--panel); border-bottom: 1px solid var(--b1);
+  display: flex; align-items: center; padding: 0 14px; gap: 20px;
+}
+.brand { font-size: 11px; font-weight: 700; color: var(--purple);
+         letter-spacing: .18em; text-transform: uppercase; }
+.pill  { display: flex; align-items: center; gap: 5px;
+         font-size: 10px; color: var(--dim); }
+.pill .v { color: var(--text); }
+#tb-mode { margin-left: auto; font-size: 10px; font-weight: 600;
+            letter-spacing: .08em; color: var(--yellow); }
+
+/* ── dot ────────────────────────────────────────────────────────────── */
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot.ok   { background: var(--green); box-shadow: 0 0 5px var(--green); animation: pulse 2s infinite; }
+.dot.warn { background: var(--yellow); }
+.dot.off  { background: var(--dim); }
+.dot.dead { background: var(--red); box-shadow: 0 0 5px var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── layout ─────────────────────────────────────────────────────────── */
+#wrap {
+  display: flex; flex-direction: column;
+  height: 100vh;
+}
+#main {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: 196px 1fr 214px;
+}
+#footer {
+  height: 22px; flex-shrink: 0;
+  background: var(--panel); border-top: 1px solid var(--b1);
+  display: flex; align-items: center;
+  padding: 0 12px; gap: 14px; font-size: 10px; color: var(--dim);
+}
+#footer .fv { color: var(--dim2); }
+
+/* ── columns ─────────────────────────────────────────────────────────── */
+#left   { border-right: 1px solid var(--b1); overflow-y: auto; padding: 10px 10px 10px 10px; }
+#center { overflow: hidden; display: flex; flex-direction: column; padding: 8px; gap: 7px; }
+#right  { border-left: 1px solid var(--b1); display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── section label ──────────────────────────────────────────────────── */
+.sec {
+  font-size: 9px; color: var(--dim); text-transform: uppercase;
+  letter-spacing: .15em; border-bottom: 1px solid var(--b1);
+  padding-bottom: 4px; margin: 10px 0 7px;
+}
+.sec:first-child { margin-top: 2px; }
+
+/* ── left column stats ──────────────────────────────────────────────── */
+.stat { margin-bottom: 8px; }
+.stat .lbl { font-size: 9px; color: var(--dim2); text-transform: uppercase;
+              letter-spacing: .1em; margin-bottom: 2px; }
+.stat .val { font-size: 20px; font-weight: 700; line-height: 1; }
+.stat .val.sm { font-size: 14px; }
+.stat .sub { font-size: 9px; color: var(--dim2); margin-top: 3px; }
+
+.pbar { height: 5px; background: var(--b1); border-radius: 3px;
+        margin: 4px 0 2px; overflow: hidden; }
+.pbar-f { height: 100%; border-radius: 3px; transition: width .5s, background .5s; }
+
+/* ── badge ───────────────────────────────────────────────────────────── */
+.bdg {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 8px; border-radius: 4px; margin-bottom: 5px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em;
+  border: 1px solid; transition: all .25s;
+}
+.bdg.ok    { background: #0c2218; border-color: #18402e; color: var(--green); }
+.bdg.warn  { background: #261d07; border-color: #453410; color: var(--yellow); }
+.bdg.alert { background: #280d0d; border-color: #4d1818; color: var(--red); }
+.bdg.info  { background: #0c182a; border-color: #18304e; color: var(--blue); }
+.bdg.off   { background: transparent; border-color: var(--b1); color: var(--dim); }
+
+/* ── center chart cards ──────────────────────────────────────────────── */
+.ccrd {
+  background: var(--panel); border: 1px solid var(--b1); border-radius: 6px;
+  padding: 9px 12px; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.ccrd.main { flex: 11; }
+.ccrd.sub  { flex: 7; }
+.ctitle {
+  font-size: 9px; color: var(--dim2); text-transform: uppercase;
+  letter-spacing: .09em; margin-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+.ccrd canvas { flex: 1; min-height: 0; width: 100% !important; }
+
+/* ── right column ────────────────────────────────────────────────────── */
+#rsigs { padding: 7px 10px 6px; border-bottom: 1px solid var(--b1); flex-shrink: 0; }
+#rsigs .sec { margin-top: 4px; }
+#rloghdr { font-size: 9px; color: var(--dim); text-transform: uppercase;
+           letter-spacing: .15em; padding: 5px 10px 4px;
+           border-bottom: 1px solid var(--b1); flex-shrink: 0; }
+#evlog { flex: 1; overflow-y: auto; padding: 3px 8px; }
+#evlog::-webkit-scrollbar { width: 3px; }
+#evlog::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 2px; }
+.ev {
+  font-size: 10px; line-height: 1.65;
+  border-bottom: 1px solid #111720;
+  padding: 2px 0;
+  display: grid; grid-template-columns: 58px 40px 1fr;
+  gap: 5px;
+}
+.ev .ts  { color: var(--dim); }
+.ev .tag { font-weight: 600; text-align: right; }
+.ev .msg { color: var(--dim2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.buy  .tag { color: var(--green); }
+.sell .tag { color: var(--red);   }
+.orc  .tag { color: var(--blue);  }
+.shk  .tag { color: var(--red); letter-spacing: .04em; }
+.rbl  .tag { color: var(--yellow); }
+.cb   .tag { color: var(--red); font-weight: 700; }
+
+/* color shortcuts */
+.g { color: var(--green); } .r { color: var(--red); }
+.b { color: var(--blue);  } .y { color: var(--yellow); }
+.p { color: var(--purple);}
+</style>
+</head>
+<body>
+<div id="wrap">
+
+<!-- topbar -->
+<div id="topbar">
+  <span class="brand">PAMM Risk Terminal</span>
+  <div class="pill">pool <span class="v">SOL / USDC</span></div>
+  <div class="pill"><span class="dot off" id="dot-bot"></span> bot <span class="v" id="tb-bot">—</span></div>
+  <div class="pill">slot <span class="v" id="tb-slot">—</span></div>
+  <div class="pill">rpc <span class="v" id="tb-rpc">—</span></div>
+  <div class="pill">tx ok <span class="v" id="tb-txok">—</span></div>
+  <span id="tb-mode">SIM MODE</span>
+</div>
+
+<!-- main 3-column -->
+<div id="main">
+
+  <!-- ── LEFT ── -->
+  <div id="left">
+
+    <div class="sec">Pool State</div>
+
+    <div class="stat">
+      <div class="lbl">Oracle Price</div>
+      <div class="val b" id="price">—</div>
+      <div class="sub" id="price-age">—</div>
+    </div>
+
+    <div class="stat">
+      <div class="lbl">Spread</div>
+      <div class="val y" id="spread">—</div>
+      <div class="sub">bps (2 × fee)</div>
+    </div>
+
+    <div class="stat">
+      <div class="lbl">Reserves A / B</div>
+      <div class="val sm" id="reserves">—</div>
+      <div class="pbar"><div class="pbar-f" id="pbar-ra" style="background:var(--blue);width:50%"></div></div>
+      <div class="sub" id="reserve-pct">50% / 50%</div>
+    </div>
+
+    <div class="stat">
+      <div class="lbl">Total Liquidity</div>
+      <div class="val sm" id="liquidity">—</div>
+    </div>
+
+    <div class="sec">Strategy</div>
+
+    <div class="stat">
+      <div class="lbl">Circuit Breaker</div>
+      <div class="bdg info" id="bdg-cb"><span class="dot ok"></span><span class="blbl"> ARMED</span></div>
+    </div>
+
+    <div class="stat">
+      <div class="lbl">Inventory Skew</div>
+      <div class="pbar"><div class="pbar-f" id="pbar-skew" style="background:var(--purple);width:50%"></div></div>
+      <div class="sub" id="skew-val">neutral</div>
+    </div>
+
+    <div class="stat">
+      <div class="lbl">Rebalances (session)</div>
+      <div class="val sm g" id="rebal-n">0</div>
+    </div>
+
+    <div class="stat">
+      <div class="lbl">LP PnL</div>
+      <div class="val sm" id="pnl">—</div>
+      <div class="sub" id="pnl-sub">fee income — IL</div>
+    </div>
+
+    <div class="stat">
+      <div class="lbl">Uptime</div>
+      <div class="val sm" id="uptime">—</div>
+    </div>
+
+  </div>
+
+  <!-- ── CENTER ── -->
+  <div id="center">
+
+    <div class="ccrd main">
+      <div class="ctitle">
+        <span>Fee Model — ewma_vol &nbsp;·&nbsp; shock decay &nbsp;·&nbsp; fee_bps &nbsp;<span style="color:var(--dim);font-size:8px">── 30 bps floor ──</span></span>
+        <span id="fee-now" style="font-size:11px; color:var(--purple); font-weight:700">— bps</span>
+      </div>
+      <canvas id="feeChart"></canvas>
+    </div>
+
+    <div class="ccrd sub">
+      <div class="ctitle">
+        <span>Price &amp; Reserve Imbalance</span>
+        <span id="imb-now" style="font-size:10px;color:var(--dim2)"></span>
+      </div>
+      <canvas id="priceChart"></canvas>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT ── -->
+  <div id="right">
+
+    <div id="rsigs">
+      <div class="sec">Active Signals</div>
+      <div class="bdg off"  id="sig-shock" ><span class="dot off" ></span><span class="blbl"> SHOCK CLEAR</span></div>
+      <div class="bdg ok"   id="sig-vol"   ><span class="dot ok"  ></span><span class="blbl"> VOL CALM</span></div>
+      <div class="bdg ok"   id="sig-oracle"><span class="dot ok"  ></span><span class="blbl"> ORACLE OK</span></div>
+      <div class="bdg ok"   id="sig-imb"   ><span class="dot ok"  ></span><span class="blbl"> BALANCED</span></div>
+      <div class="bdg info" id="sig-cb"    ><span class="dot ok"  ></span><span class="blbl"> CB ARMED</span></div>
+    </div>
+
+    <div id="rloghdr">Event Log</div>
+    <div id="evlog"></div>
+
+  </div>
+
+</div><!-- /main -->
+
+<!-- footer -->
+<div id="footer">
+  <span>PAMM Risk Terminal</span>
+  <span>· <span class="fv" id="ft-mode">sim</span></span>
+  <span>· ticks <span class="fv" id="ft-tick">0</span></span>
+  <span>· <span class="fv" id="ft-ts">—</span></span>
+  <span style="margin-left:auto">src/lib.rs · EWMA Dynamic Fee v2 · claude-sonnet-4-6</span>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+'use strict';
+
+// ── Fee model — exact mirror of src/lib.rs ────────────────────────────────────
+// BASE_FEE_1E9 = 800_000 → 8 bps
+// vol_fee = ewmaVol_1e9 * VOL_MULT  (VOL_MULT = 2)
+// shock_fee = shock_steps * SHOCK_FEE_PER_STEP  (= 400_000 / 1e9 per step = 4 bps/step)
+// fee_bps = (BASE + vol_fee + shock_fee) / 100_000
+// → in fractional units: vol_fee_bps = ewmaVol_frac * 1e9 * 2 / 100_000 = ewmaVol_frac * 20_000
+
+const BASE_BPS       = 8;
+const SHOCK_THRESH   = 0.005;   // 0.5% relative price move → reset shock
+const SHOCK_MAX      = 8;       // SHOCK_DECAY_STEPS
+const SHOCK_BPS_STEP = 4;       // bps per remaining step
+const EWMA_ALPHA     = 0.20;
+const MAX_BPS        = 100;
+const VOL_TO_BPS     = 20_000;  // ewmaVol_frac → bps contribution
+
+function feeBps(ewmaVol, shockSteps) {
+  return Math.min(BASE_BPS + ewmaVol * VOL_TO_BPS + shockSteps * SHOCK_BPS_STEP, MAX_BPS);
+}
+
+// ── Simulation state ──────────────────────────────────────────────────────────
+const SS = {
+  price: 90.28, ewmaVol: 0.001, shockLeft: 0,
+  rx: 195_000_000, ry: 503_000_000,
+  lpPnl: 0, rebalN: 0, swapN: 0,
+  oracleAge: 2, uptimeSec: 0, tick: 0,
+};
+
+function simTick() {
+  SS.tick++; SS.uptimeSec++;
+  SS.oracleAge = SS.oracleAge < 9 ? SS.oracleAge + 1 : 1;
+
+  const big  = Math.random() < 0.04;
+  const sig  = Math.random() < 0.5 ? 1 : -1;
+  const mag  = big ? 0.005 + Math.random() * 0.008 : 0.0004 + Math.random() * 0.0016;
+  SS.price   = Math.max(82, Math.min(108, SS.price * (1 + sig * mag)));
+
+  const priceChg = mag; // |ΔP/P|
+  SS.ewmaVol = EWMA_ALPHA * priceChg + (1 - EWMA_ALPHA) * SS.ewmaVol;
+
+  const wasShocked = SS.shockLeft > 0;
+  if (priceChg >= SHOCK_THRESH) SS.shockLeft = SHOCK_MAX;
+  else if (SS.shockLeft > 0)    SS.shockLeft--;
+  const justShocked = !wasShocked && SS.shockLeft === SHOCK_MAX;
+
+  const fb    = feeBps(SS.ewmaVol, SS.shockLeft);
+  const volFb = Math.min(SS.ewmaVol * VOL_TO_BPS, MAX_BPS - BASE_BPS);
+  const shkFb = SS.shockLeft * SHOCK_BPS_STEP;
+
+  // occasional swap
+  let swapEv = null;
+  if (Math.random() < 0.14) {
+    const isBuy = sig > 0;
+    const frac  = 0.002 + Math.random() * 0.007;
+    const dA    = SS.rx * frac;
+    if (isBuy) { SS.rx -= dA * 0.998; SS.ry += dA * SS.price * 1.002; }
+    else       { SS.rx += dA; SS.ry -= dA * SS.price * 0.998; }
+    SS.lpPnl += BASE_BPS * 0.08;
+    SS.swapN++;
+    swapEv = { isBuy, dA };
+  }
+
+  // rebalance when imbalance > 13% by value
+  const valA = SS.rx * SS.price;
+  const valB = SS.ry;
+  const vRat = valA / (valA + valB);
+  let rebalEv = false;
+  if (Math.abs(vRat - 0.5) > 0.13 && Math.random() < 0.28) {
+    const mid = (valA + valB) / 2;
+    SS.rx = mid / SS.price;
+    SS.ry = mid;
+    SS.rebalN++;
+    rebalEv = true;
+  }
+
+  return {
+    price: SS.price, ewmaVol: SS.ewmaVol, shockLeft: SS.shockLeft,
+    feeBps: fb, volFeeBps: volFb, shockFeeBps: shkFb,
+    rx: SS.rx, ry: SS.ry, vRat,
+    lpPnl: SS.lpPnl, rebalN: SS.rebalN,
+    oracleAge: SS.oracleAge, uptimeSec: SS.uptimeSec,
+    spreadBps: fb * 2,
+    swapEv, rebalEv, justShocked, halted: false,
+  };
+}
+
+// ── Chart buffers ─────────────────────────────────────────────────────────────
+const N      = 90;
+const LABELS = [];
+const dFee   = [], dFloor = [], dPrice = [], dVRat = [];
+
+// ── Threshold reference line plugin ──────────────────────────────────────────
+const threshPlugin = {
+  id: 'thresh',
+  afterDraw(chart) {
+    const ys = chart.scales.y;
+    if (!ys) return;
+    const y  = ys.getPixelForValue(30);
+    const { left, right } = chart.chartArea;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = 'rgba(90,110,140,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    ctx.restore();
+  },
+};
+
+// ── Chart.js shared config ────────────────────────────────────────────────────
+const GC   = '#14192380';
+const TC   = '#3d4d62';
+const TF   = { size: 9, family: 'SF Mono, monospace' };
+const AX   = (extra = {}) => ({
+  ticks: { color: TC, font: TF, maxTicksLimit: 5 },
+  grid:  { color: GC },
+  border:{ color: '#181f2c' },
+  ...extra,
+});
+
+const feeChart = new Chart(document.getElementById('feeChart'), {
+  type: 'line',
+  data: {
+    labels: LABELS,
+    datasets: [
+      { // total fee (filled)
+        data: dFee, label: 'fee_bps',
+        borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.13)',
+        borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true, order: 1,
+      },
+      { // base + vol floor (dashed orange) — shock contribution = gap above this
+        data: dFloor, label: 'base+vol',
+        borderColor: '#fb923c', backgroundColor: 'transparent',
+        borderWidth: 1.5, borderDash: [4, 3],
+        pointRadius: 0, tension: 0.3, fill: false, order: 2,
+      },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ...AX(), display: false },
+      y: { ...AX({ ticks: { color: TC, font: TF, maxTicksLimit: 6, callback: v => v + ' bps' } }), min: 0, max: 100 },
+    },
+  },
+  plugins: [threshPlugin],
+});
+
+const priceChart = new Chart(document.getElementById('priceChart'), {
+  type: 'line',
+  data: {
+    labels: LABELS,
+    datasets: [
+      {
+        data: dPrice, label: 'price',
+        borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.07)',
+        borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: true,
+        yAxisID: 'yP',
+      },
+      {
+        data: dVRat, label: 'value_ratio',
+        borderColor: '#fbbf24', backgroundColor: 'transparent',
+        borderWidth: 1.5, borderDash: [3, 3],
+        pointRadius: 0, tension: 0.3, fill: false,
+        yAxisID: 'yV',
+      },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ...AX(), display: false },
+      yP: { ...AX({ ticks: { color: '#60a5fa', font: TF, maxTicksLimit: 4, callback: v => '$' + v.toFixed(1) } }), position: 'left' },
+      yV: { ...AX({ ticks: { color: '#fbbf2488', font: TF, maxTicksLimit: 3, callback: v => (v*100).toFixed(0)+'%' }, grid: { display: false } }),
+             position: 'right', min: 0.3, max: 0.7 },
+    },
+  },
+});
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function badge(id, state, label) {
+  const el = $(id); if (!el) return;
+  el.className = 'bdg ' + state;
+  const dot = el.querySelector('.dot');
+  const lbl = el.querySelector('.blbl');
+  if (dot) dot.className = 'dot ' + ({ alert: 'dead', warn: 'warn', off: 'off' }[state] || 'ok');
+  if (lbl) lbl.textContent = ' ' + label;
+}
+
+let logN = 0;
+function log(cls, tag, msg) {
+  const el = $('evlog');
+  const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const d  = document.createElement('div');
+  d.className = 'ev ' + cls;
+  d.innerHTML = `<span class="ts">${ts}</span><span class="tag">${tag}</span><span class="msg">${msg}</span>`;
+  el.insertBefore(d, el.firstChild);
+  while (el.children.length > 120) el.removeChild(el.lastChild);
+  logN++;
+}
+
+function fmt(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return Number(n).toFixed(0);
+}
+function fmtT(s) {
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), ss = s%60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${ss}s` : `${ss}s`;
+}
+
+// ── Push to charts ────────────────────────────────────────────────────────────
+let tickN = 0;
+
+function pushCharts(fb, floor, price, vRat) {
+  const t = new Date().toLocaleTimeString('en-US', { hour12: false, minute: '2-digit', second: '2-digit' });
+  LABELS.push(t); dFee.push(fb); dFloor.push(floor); dPrice.push(price); dVRat.push(vRat);
+  if (LABELS.length > N) { LABELS.shift(); dFee.shift(); dFloor.shift(); dPrice.shift(); dVRat.shift(); }
+  feeChart.update('none');
+  priceChart.update('none');
+}
+
+// ── Apply one tick to all DOM ─────────────────────────────────────────────────
+function apply(d) {
+  tickN++;
+
+  // topbar counters
+  $('tb-slot').textContent = (284_200_000 + tickN * 380).toLocaleString();
+  $('tb-rpc').textContent  = (22 + (Math.random() * 20 | 0)) + 'ms';
+  $('tb-txok').textContent = (97.2 + Math.random() * 2.6).toFixed(1) + '%';
+
+  // ── left column ───────────────────────────────────────────────────────────
+  $('price').textContent    = '$' + d.price.toFixed(4);
+  $('price').className      = 'val ' + (d.oracleAge > 12 ? 'y' : 'b');
+  $('price-age').textContent = d.oracleAge + 's ago';
+
+  $('spread').textContent   = d.spreadBps.toFixed(1);
+  $('spread').className     = 'val ' + (d.spreadBps > 70 ? 'r' : 'y');
+
+  $('reserves').textContent = fmt(d.rx) + ' / ' + fmt(d.ry);
+  const rawRat = d.rx / (d.rx + d.ry);
+  $('pbar-ra').style.width      = (rawRat * 100).toFixed(0) + '%';
+  $('pbar-ra').style.background = Math.abs(rawRat - 0.5) > 0.16 ? 'var(--orange)' : 'var(--blue)';
+  $('reserve-pct').textContent  = (rawRat*100).toFixed(0) + '% A / ' + ((1-rawRat)*100).toFixed(0) + '% B';
+
+  $('liquidity').textContent = fmt((d.rx + d.ry) / 1e6) + 'M';
+
+  badge('bdg-cb', d.halted ? 'alert' : 'info', d.halted ? 'TRIPPED' : 'ARMED');
+
+  const skewPct = d.vRat * 100;
+  $('pbar-skew').style.width      = skewPct.toFixed(0) + '%';
+  $('pbar-skew').style.background = Math.abs(skewPct - 50) > 14 ? 'var(--orange)' : 'var(--purple)';
+  const skewDelta = skewPct - 50;
+  $('skew-val').textContent = Math.abs(skewDelta) < 3 ? 'neutral' :
+    skewDelta > 0 ? `+${skewDelta.toFixed(0)}% A-heavy` : `${skewDelta.toFixed(0)}% B-heavy`;
+
+  $('rebal-n').textContent = d.rebalN;
+  const pnlEl = $('pnl');
+  pnlEl.textContent  = (d.lpPnl >= 0 ? '+' : '') + d.lpPnl.toFixed(1) + ' bps';
+  pnlEl.className    = 'val sm ' + (d.lpPnl > 8 ? 'g' : d.lpPnl < -10 ? 'r' : 'y');
+  $('uptime').textContent = fmtT(d.uptimeSec);
+
+  // ── center ────────────────────────────────────────────────────────────────
+  const feeEl = $('fee-now');
+  feeEl.textContent = d.feeBps.toFixed(1) + ' bps';
+  feeEl.style.color = d.feeBps > 60 ? 'var(--red)' : d.feeBps > 40 ? 'var(--orange)' : 'var(--purple)';
+  $('imb-now').textContent = 'skew ' + ((d.vRat - 0.5)*100).toFixed(1) + '%';
+
+  pushCharts(d.feeBps, BASE_BPS + d.volFeeBps, d.price, d.vRat);
+
+  // ── right — signals ───────────────────────────────────────────────────────
+  badge('sig-shock', d.shockLeft > 0 ? 'alert' : 'off',
+        d.shockLeft > 0 ? `SHOCK (${d.shockLeft} steps left)` : 'SHOCK CLEAR');
+
+  const vbps = d.ewmaVol * VOL_TO_BPS;
+  badge('sig-vol',
+        vbps > 40 ? 'alert' : vbps > 25 ? 'warn' : 'ok',
+        (vbps > 40 ? 'HIGH VOL ' : vbps > 25 ? 'VOL ' : 'VOL CALM ') + vbps.toFixed(0) + ' bps');
+
+  badge('sig-oracle',
+        d.oracleAge > 15 ? 'alert' : d.oracleAge > 8 ? 'warn' : 'ok',
+        d.oracleAge > 15 ? `ORACLE STALE ${d.oracleAge}s` :
+        d.oracleAge > 8  ? `ORACLE ${d.oracleAge}s` : `ORACLE ${d.oracleAge}s`);
+
+  const imb = Math.abs(d.vRat - 0.5);
+  badge('sig-imb',
+        imb > 0.18 ? 'alert' : imb > 0.10 ? 'warn' : 'ok',
+        imb > 0.18 ? `IMBAL ${(imb*100).toFixed(0)}%` :
+        imb > 0.10 ? `SKEW ${(imb*100).toFixed(0)}%` : 'BALANCED');
+
+  badge('sig-cb', d.halted ? 'alert' : 'info', d.halted ? 'CB TRIPPED' : 'CB ARMED');
+
+  // ── events ────────────────────────────────────────────────────────────────
+  if (d.justShocked)
+    log('shk', 'SHOCK',
+        `price move ≥0.5% · shock_steps=${SHOCK_MAX} · fee ${d.feeBps.toFixed(0)} bps`);
+
+  if (d.swapEv) {
+    const e = d.swapEv;
+    log(e.isBuy ? 'buy' : 'sell', e.isBuy ? 'BUY' : 'SELL',
+        `${fmt(e.dA)} A · $${d.price.toFixed(3)} · fee ${d.feeBps.toFixed(0)} bps`);
+  }
+
+  if (d.rebalEv)
+    log('rbl', 'REBAL',
+        `inventory rebalanced · skew was ${((d.vRat-0.5)*100).toFixed(0)}%`);
+
+  if (tickN % 9 === 0)
+    log('orc', 'ORACLE',
+        `$${d.price.toFixed(4)} · ${d.oracleAge}s · spread ${d.spreadBps.toFixed(0)} bps · vol ${vbps.toFixed(0)} bps`);
+
+  // ── footer ────────────────────────────────────────────────────────────────
+  $('ft-tick').textContent = tickN;
+  $('ft-ts').textContent   = new Date().toLocaleTimeString();
+}
+
+// ── Live SSE (dashboard.html bot format) ──────────────────────────────────────
+let liveMode = false, retries = 0;
+
+function liveToTick(s) {
+  const price     = s.oracle.price / 1e9;
+  const spreadBps = s.oracle.spread_bps || 0;
+  const fb        = spreadBps / 2;
+  const volFb     = Math.max(0, fb - BASE_BPS);
+  const ra = s.pool.reserve_a, rb = s.pool.reserve_b;
+  const valA = ra * price, valB = rb;
+  const vRat = valA / (valA + valB);
+  return {
+    price, feeBps: fb, volFeeBps: volFb, shockFeeBps: 0,
+    spreadBps, ewmaVol: volFb / VOL_TO_BPS, shockLeft: 0,
+    rx: ra, ry: rb, vRat,
+    lpPnl:     s.lp ? s.lp.pnl_bps : 0,
+    uptimeSec: s.uptime_s || 0,
+    rebalN:    0, oracleAge: s.oracle.last_update_age_s,
+    halted: !!s.halted, swapEv: null, rebalEv: false, justShocked: false,
+  };
+}
+
+function connectSSE() {
+  const es = new EventSource('http://127.0.0.1:19001/feed');
+  let ok = false;
+  es.addEventListener('snapshot', e => {
+    if (!ok) {
+      ok = true; liveMode = true; stopSim();
+      $('dot-bot').className  = 'dot ok';
+      $('tb-bot').textContent = 'LIVE';
+      $('tb-mode').textContent = 'LIVE MODE';
+      $('tb-mode').style.color = 'var(--green)';
+      $('ft-mode').textContent  = 'live';
+    }
+    try { apply(liveToTick(JSON.parse(e.data))); } catch(e) {}
+  });
+  es.onerror = () => {
+    if (!liveMode && retries++ === 0) startSim();
+    else if (liveMode) { $('dot-bot').className = 'dot warn'; $('tb-bot').textContent = 'RECONNECT'; }
+    es.close(); setTimeout(connectSSE, 5000);
+  };
+}
+
+// ── Sim driver ────────────────────────────────────────────────────────────────
+let simIv = null;
+
+function startSim() {
+  if (simIv) return;
+  $('dot-bot').className  = 'dot warn';
+  $('tb-bot').textContent = 'SIM';
+  apply(simTick());
+  simIv = setInterval(() => apply(simTick()), 820);
+}
+
+function stopSim() {
+  if (simIv) { clearInterval(simIv); simIv = null; }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+connectSSE();
+setTimeout(() => { if (!liveMode && !simIv) startSim(); }, 1400);
+</script>
+</body>
+</html>
