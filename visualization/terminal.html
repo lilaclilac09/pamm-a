@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PAMM Terminal</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:     #080b0f;
+  --panel:  #0c1018;
+  --b1:     #161e2c;
+  --b2:     #1e2a3a;
+  --text:   #dde4ee;
+  --dim:    #445568;
+  --dim2:   #627a96;
+  --green:  #34d399;
+  --red:    #f87171;
+  --blue:   #60a5fa;
+  --purple: #a78bfa;
+  --yellow: #fbbf24;
+  --orange: #fb923c;
+  --teal:   #2dd4bf;
+}
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+  font-family: 'SF Mono','Fira Code','Cascadia Code',monospace; font-size: 12px; }
+
+/* topbar */
+#topbar {
+  height: 34px; flex-shrink: 0;
+  background: var(--panel); border-bottom: 1px solid var(--b1);
+  display: flex; align-items: center; padding: 0 14px; gap: 18px;
+}
+.brand { font-size: 11px; font-weight: 700; color: var(--purple);
+  letter-spacing: .2em; text-transform: uppercase; }
+.pill { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--dim); }
+.pill .v { color: var(--text); }
+#tb-mode { margin-left: auto; font-size: 10px; font-weight: 600;
+  letter-spacing: .08em; color: var(--yellow); }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot.ok   { background: var(--green); box-shadow: 0 0 5px var(--green); animation: pulse 2s infinite; }
+.dot.warn { background: var(--yellow); }
+.dot.off  { background: var(--dim); }
+.dot.dead { background: var(--red); box-shadow: 0 0 5px var(--red); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+/* layout */
+#wrap { display: flex; flex-direction: column; height: 100vh; }
+#main { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px 1fr 218px; }
+#footer { height: 22px; flex-shrink: 0; background: var(--panel);
+  border-top: 1px solid var(--b1); display: flex; align-items: center;
+  padding: 0 12px; gap: 14px; font-size: 10px; color: var(--dim); }
+#footer .fv { color: var(--dim2); }
+
+/* columns */
+#left   { border-right: 1px solid var(--b1); overflow-y: auto; padding: 8px 10px; }
+#center { overflow: hidden; display: flex; flex-direction: column; padding: 7px; gap: 6px; }
+#right  { border-left: 1px solid var(--b1); display: flex; flex-direction: column; overflow: hidden; }
+#left::-webkit-scrollbar { width: 3px; }
+#left::-webkit-scrollbar-thumb { background: var(--b2); }
+
+/* section header */
+.sec {
+  font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .15em;
+  border-bottom: 1px solid var(--b1); padding-bottom: 4px; margin: 9px 0 6px;
+}
+.sec:first-child { margin-top: 2px; }
+.sec .sdot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+/* stats */
+.stat { margin-bottom: 7px; }
+.stat .lbl { font-size: 9px; color: var(--dim2); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 2px; }
+.stat .val { font-size: 20px; font-weight: 700; line-height: 1; }
+.stat .val.sm { font-size: 14px; }
+.stat .val.xs { font-size: 12px; }
+.stat .sub { font-size: 9px; color: var(--dim2); margin-top: 2px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 7px; }
+.row2 .stat { margin-bottom: 0; }
+
+/* progress bar */
+.pbar { height: 5px; background: var(--b1); border-radius: 3px; margin: 4px 0 2px; overflow: hidden; }
+.pbar-f { height: 100%; border-radius: 3px; transition: width .5s, background .5s; }
+
+/* badges */
+.bdg {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 8px; border-radius: 4px; margin-bottom: 5px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  border: 1px solid; transition: all .22s;
+}
+.bdg.ok    { background: #0b2118; border-color: #163828; color: var(--green); }
+.bdg.warn  { background: #231c07; border-color: #3e2f0e; color: var(--yellow); }
+.bdg.alert { background: #260c0c; border-color: #481515; color: var(--red); }
+.bdg.info  { background: #0b1828; border-color: #162a46; color: var(--blue); }
+.bdg.teal  { background: #0b1e1e; border-color: #163030; color: var(--teal); }
+.bdg.off   { background: transparent; border-color: var(--b1); color: var(--dim); }
+
+/* chart cards */
+.ccrd {
+  background: var(--panel); border: 1px solid var(--b1); border-radius: 5px;
+  padding: 8px 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+.ccrd.c1 { flex: 10; } .ccrd.c2 { flex: 7; } .ccrd.c3 { flex: 7; }
+.ctitle {
+  font-size: 9px; color: var(--dim2); text-transform: uppercase; letter-spacing: .09em;
+  margin-bottom: 5px; flex-shrink: 0;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.ccrd canvas { flex: 1; min-height: 0; width: 100% !important; }
+
+/* right column */
+#rsigs  { padding: 6px 10px 8px; border-bottom: 1px solid var(--b1); flex-shrink: 0; }
+#rloghdr{ font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .15em;
+          padding: 5px 10px 4px; border-bottom: 1px solid var(--b1); flex-shrink: 0; }
+#evlog  { flex: 1; overflow-y: auto; padding: 2px 8px; }
+#evlog::-webkit-scrollbar { width: 3px; }
+#evlog::-webkit-scrollbar-thumb { background: var(--b2); }
+.ev { font-size: 10px; line-height: 1.6; border-bottom: 1px solid #0f151e;
+  padding: 2px 0; display: grid; grid-template-columns: 56px 40px 1fr; gap: 5px; }
+.ev .ts  { color: var(--dim); }
+.ev .tag { font-weight: 600; text-align: right; }
+.ev .msg { color: var(--dim2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.buy  .tag { color: var(--green); } .sell .tag { color: var(--red); }
+.orc  .tag { color: var(--blue);  } .shk  .tag { color: var(--red); letter-spacing:.04em; }
+.rbl  .tag { color: var(--yellow);} .rdr  .tag { color: var(--teal); }
+.cb   .tag { color: var(--red); font-weight: 700; }
+
+/* color helpers */
+.g{color:var(--green)} .r{color:var(--red)} .b{color:var(--blue)}
+.y{color:var(--yellow)} .p{color:var(--purple)} .t{color:var(--teal)}
+</style>
+</head>
+<body>
+<div id="wrap">
+
+<!-- ── topbar ─────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <span class="brand">PAMM Terminal</span>
+  <div class="pill">pool <span class="v">SOL / USDC</span></div>
+  <div class="pill"><span class="dot off" id="dot-mm"></span> mm <span class="v" id="tb-mm">—</span></div>
+  <div class="pill"><span class="dot off" id="dot-rdr"></span> reader <span class="v" id="tb-rdr">—</span></div>
+  <div class="pill">slot <span class="v" id="tb-slot">—</span></div>
+  <div class="pill">rpc <span class="v" id="tb-rpc">—</span></div>
+  <div class="pill">tx <span class="v" id="tb-tx">—</span></div>
+  <span id="tb-mode">SIM MODE</span>
+</div>
+
+<!-- ── 3-column body ──────────────────────────────────────────────────── -->
+<div id="main">
+
+<!-- ── LEFT ── -->
+<div id="left">
+
+  <div class="sec">Pool State</div>
+  <div class="stat">
+    <div class="lbl">Oracle Price</div>
+    <div class="val b" id="price">—</div>
+    <div class="sub" id="price-age">—</div>
+  </div>
+  <div class="row2">
+    <div class="stat">
+      <div class="lbl">Spread</div>
+      <div class="val sm y" id="spread">—</div>
+      <div class="sub">bps</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Fee</div>
+      <div class="val sm p" id="fee-left">—</div>
+      <div class="sub">bps</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="lbl">Reserves A / B</div>
+    <div class="val xs" id="reserves">—</div>
+    <div class="pbar"><div class="pbar-f" id="pbar-ra" style="background:var(--blue);width:50%"></div></div>
+    <div class="sub" id="res-pct">—</div>
+  </div>
+  <div class="row2">
+    <div class="stat">
+      <div class="lbl">Swaps</div>
+      <div class="val sm" id="swaps">—</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Liquidity</div>
+      <div class="val sm" id="liq">—</div>
+    </div>
+  </div>
+
+  <div class="sec"><span class="sdot" style="background:var(--purple)"></span>MM Strategy</div>
+  <div class="stat">
+    <div class="lbl">Circuit Breaker</div>
+    <div class="bdg info" id="bdg-cb"><span class="dot ok"></span><span class="bl"> ARMED</span></div>
+  </div>
+  <div class="stat">
+    <div class="lbl">Inventory Skew</div>
+    <div class="pbar"><div class="pbar-f" id="pbar-skew" style="background:var(--purple);width:50%"></div></div>
+    <div class="sub" id="skew-val">neutral</div>
+  </div>
+  <div class="row2">
+    <div class="stat">
+      <div class="lbl">LP PnL</div>
+      <div class="val sm" id="lp-pnl">—</div>
+      <div class="sub">bps</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Rebal</div>
+      <div class="val sm g" id="rebal-n">0</div>
+      <div class="sub">session</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="lbl">Uptime</div>
+    <div class="val xs" id="uptime">—</div>
+  </div>
+
+  <div class="sec"><span class="sdot" style="background:var(--teal)"></span>Reader Bot</div>
+  <div class="stat">
+    <div class="lbl">Status</div>
+    <div class="bdg teal" id="bdg-rdr"><span class="dot off" id="dot-rdr2"></span><span class="bl"> WAITING</span></div>
+  </div>
+  <div class="row2">
+    <div class="stat">
+      <div class="lbl">Trades</div>
+      <div class="val sm t" id="r-trades">0</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">MtM PnL</div>
+      <div class="val sm" id="r-pnl">—</div>
+      <div class="sub" id="r-pnl-bps">— bps</div>
+    </div>
+  </div>
+  <div class="row2">
+    <div class="stat">
+      <div class="lbl">Volume</div>
+      <div class="val xs" id="r-vol">—</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Spread Paid</div>
+      <div class="val xs r" id="r-spread">—</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="lbl">Last Signal</div>
+    <div class="val xs" id="r-sig">—</div>
+    <div class="sub" id="r-move">last move: —</div>
+  </div>
+
+</div><!-- /left -->
+
+<!-- ── CENTER ── -->
+<div id="center">
+
+  <div class="ccrd c1">
+    <div class="ctitle">
+      <span>Fee Model — ewma_vol · shock decay · fee_bps &nbsp;<span style="color:var(--dim);font-size:8px">── 30 bps ──</span></span>
+      <span id="fee-badge" style="font-size:11px;font-weight:700;color:var(--purple)">— bps</span>
+    </div>
+    <canvas id="feeChart"></canvas>
+  </div>
+
+  <div class="ccrd c2">
+    <div class="ctitle">
+      <span>Price &amp; Reserve Imbalance</span>
+      <span id="imb-now" style="font-size:10px;color:var(--dim2)"></span>
+    </div>
+    <canvas id="priceChart"></canvas>
+  </div>
+
+  <div class="ccrd c3">
+    <div class="ctitle">
+      <span style="color:var(--teal)">Reader Bot — Cumulative PnL &amp; Volume</span>
+      <span id="r-pnl-badge" style="font-size:10px;color:var(--teal)">0.00 bps</span>
+    </div>
+    <canvas id="readerChart"></canvas>
+  </div>
+
+</div><!-- /center -->
+
+<!-- ── RIGHT ── -->
+<div id="right">
+  <div id="rsigs">
+    <div class="sec" style="margin-top:4px">Active Signals</div>
+    <div class="bdg off"  id="sig-shock"><span class="dot off"></span><span class="bl"> SHOCK CLEAR</span></div>
+    <div class="bdg ok"   id="sig-vol"  ><span class="dot ok" ></span><span class="bl"> VOL CALM</span></div>
+    <div class="bdg ok"   id="sig-orc"  ><span class="dot ok" ></span><span class="bl"> ORACLE OK</span></div>
+    <div class="bdg ok"   id="sig-imb"  ><span class="dot ok" ></span><span class="bl"> BALANCED</span></div>
+    <div class="bdg info" id="sig-cb"   ><span class="dot ok" ></span><span class="bl"> CB ARMED</span></div>
+  </div>
+  <div id="rloghdr">Event Log</div>
+  <div id="evlog"></div>
+</div>
+
+</div><!-- /main -->
+
+<div id="footer">
+  <span>PAMM Terminal</span>
+  <span>· <span class="fv" id="ft-mode">sim</span></span>
+  <span>· ticks <span class="fv" id="ft-tick">0</span></span>
+  <span>· <span class="fv" id="ft-ts">—</span></span>
+  <span style="margin-left:auto">src/lib.rs · EWMA Dynamic Fee v2</span>
+</div>
+</div><!-- /wrap -->
+
+<script>
+'use strict';
+
+// ── Fee model (src/lib.rs) ────────────────────────────────────────────────────
+const BASE_BPS   = 8,  SHOCK_THRESH = 0.005, SHOCK_MAX = 8;
+const SHOCK_STEP = 4,  EWMA_A = 0.20, MAX_BPS = 100, V2B = 20_000;
+function feeBps(v, s) { return Math.min(BASE_BPS + v*V2B + s*SHOCK_STEP, MAX_BPS); }
+
+// ── Sim state ─────────────────────────────────────────────────────────────────
+const MM = {
+  price:90.28, ewmaVol:0.001, shockLeft:0,
+  rx:195e6, ry:503e6, lpPnl:0, rebalN:0, swapN:0,
+  oracleAge:2, upSec:0, tick:0,
+};
+const RDR = {
+  active:false, trades:0, pnlBps:0, volB:0,
+  spreadPaid:0, netA:0, netB:0, lastMoveBps:0, lastSig:'',
+  momentum:0,     // running count: +1 buy, -1 sell
+  trigBps:1.5,    // momentum threshold to trade
+};
+
+function simTick() {
+  MM.tick++; MM.upSec++;
+  MM.oracleAge = MM.oracleAge < 9 ? MM.oracleAge + 1 : 1;
+
+  const big = Math.random() < 0.04;
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const mag = big ? 0.005 + Math.random()*0.008 : 0.0005 + Math.random()*0.0015;
+  MM.price = Math.max(82, Math.min(110, MM.price * (1 + dir*mag)));
+  MM.ewmaVol = EWMA_A*mag + (1-EWMA_A)*MM.ewmaVol;
+
+  const wasShk = MM.shockLeft > 0;
+  if (mag >= SHOCK_THRESH) MM.shockLeft = SHOCK_MAX;
+  else if (MM.shockLeft > 0) MM.shockLeft--;
+  const justShk = !wasShk && MM.shockLeft === SHOCK_MAX;
+
+  const fb   = feeBps(MM.ewmaVol, MM.shockLeft);
+  const volFb = Math.min(MM.ewmaVol*V2B, MAX_BPS-BASE_BPS);
+
+  // MM swap
+  let swapEv = null;
+  if (Math.random() < 0.13) {
+    const f = 0.002 + Math.random()*0.007;
+    const dA = MM.rx * f;
+    if (dir > 0) { MM.rx -= dA*.998; MM.ry += dA*MM.price*1.002; }
+    else         { MM.rx += dA;      MM.ry -= dA*MM.price*.998; }
+    MM.lpPnl += BASE_BPS * 0.07;
+    MM.swapN++;
+    swapEv = { isBuy: dir > 0, dA };
+  }
+
+  // rebalance
+  const valA = MM.rx * MM.price, valB = MM.ry;
+  const vRat = valA / (valA + valB);
+  let rebalEv = false;
+  if (Math.abs(vRat - 0.5) > 0.13 && Math.random() < 0.28) {
+    const mid = (valA+valB)/2;
+    MM.rx = mid/MM.price; MM.ry = mid;
+    MM.rebalN++; rebalEv = true;
+  }
+
+  // ── Reader bot: trades on momentum signal ─────────────────────────────────
+  RDR.momentum = RDR.momentum * 0.75 + dir * 0.25;  // momentum EWMA
+  const moveBps = mag * 10000;
+  let rdrEv = null;
+
+  if (Math.abs(RDR.momentum) > 0.3 && moveBps >= RDR.trigBps && Math.random() < 0.35) {
+    const isBuy = RDR.momentum > 0;
+    const tradeB = 5000 + Math.random() * 15000;
+    const spreadCost = tradeB * fb / 10000;
+    const movePnl   = tradeB * moveBps / 10000 * (isBuy ? 1 : 1) * 0.6;
+    const netPnl    = movePnl - spreadCost;
+
+    RDR.trades++;
+    RDR.volB      += tradeB;
+    RDR.spreadPaid += spreadCost;
+    RDR.pnlBps    += netPnl / (RDR.volB || 1) * 100;
+    RDR.lastMoveBps = moveBps.toFixed(1);
+    RDR.lastSig   = (isBuy ? 'LONG' : 'SHORT') + ' mom=' + RDR.momentum.toFixed(2);
+    RDR.active    = true;
+    rdrEv = { isBuy, tradeB, moveBps: moveBps.toFixed(1), fb };
+  }
+
+  return {
+    price: MM.price, ewmaVol: MM.ewmaVol, shockLeft: MM.shockLeft,
+    feeBps: fb, volFeeBps: volFb, spreadBps: fb*2,
+    rx: MM.rx, ry: MM.ry, vRat,
+    lpPnl: MM.lpPnl, rebalN: MM.rebalN, swapN: MM.swapN,
+    oracleAge: MM.oracleAge, upSec: MM.upSec,
+    justShk, swapEv, rebalEv,
+    rdr: { ...RDR }, rdrEv,
+    halted: false,
+  };
+}
+
+// ── Chart buffers ─────────────────────────────────────────────────────────────
+const N=90, LBL=[], dFee=[], dFloor=[], dPr=[], dVRat=[], dRPnl=[], dRVol=[];
+
+const threshPl = { id:'thr', afterDraw(c) {
+  const ys=c.scales.y; if(!ys) return;
+  const y=ys.getPixelForValue(30), {left,right}=c.chartArea, ctx=c.ctx;
+  ctx.save(); ctx.setLineDash([5,5]); ctx.strokeStyle='rgba(80,100,130,.45)';
+  ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(left,y); ctx.lineTo(right,y); ctx.stroke(); ctx.restore();
+}};
+
+const GC='#12182480', TC='#3a4d60', TF={size:9,family:'SF Mono,monospace'};
+const AX=(e={})=>({ ticks:{color:TC,font:TF,maxTicksLimit:5}, grid:{color:GC}, border:{color:'#161e2c'}, ...e });
+
+const feeChart = new Chart($c('feeChart'),{ type:'line', data:{ labels:LBL, datasets:[
+  { data:dFee, borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.12)',
+    borderWidth:2, pointRadius:0, tension:.3, fill:true, order:1 },
+  { data:dFloor, borderColor:'#fb923c', backgroundColor:'transparent',
+    borderWidth:1.5, borderDash:[4,3], pointRadius:0, tension:.3, fill:false, order:2 },
+]},
+options:{ responsive:true, maintainAspectRatio:false, animation:false,
+  plugins:{legend:{display:false}},
+  scales:{ x:{...AX(),display:false},
+    y:{...AX({ticks:{color:TC,font:TF,maxTicksLimit:6,callback:v=>v+' bps'}}),min:0,max:100} },
+}, plugins:[threshPl] });
+
+const priceChart = new Chart($c('priceChart'),{ type:'line', data:{ labels:LBL, datasets:[
+  { data:dPr, borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.07)',
+    borderWidth:1.5, pointRadius:0, tension:.3, fill:true, yAxisID:'yP' },
+  { data:dVRat, borderColor:'#fbbf24', backgroundColor:'transparent',
+    borderWidth:1.5, borderDash:[3,3], pointRadius:0, tension:.3, fill:false, yAxisID:'yV' },
+]},
+options:{ responsive:true, maintainAspectRatio:false, animation:false,
+  plugins:{legend:{display:false}},
+  scales:{
+    x:{...AX(),display:false},
+    yP:{...AX({ticks:{color:'#60a5fa',font:TF,maxTicksLimit:4,callback:v=>'$'+v.toFixed(1)}}),position:'left'},
+    yV:{...AX({ticks:{color:'#fbbf2488',font:TF,maxTicksLimit:3,callback:v=>(v*100).toFixed(0)+'%'},grid:{display:false}}),
+      position:'right', min:.3, max:.7},
+  },
+}});
+
+const readerChart = new Chart($c('readerChart'),{ type:'bar', data:{ labels:LBL, datasets:[
+  { type:'line', data:dRPnl, label:'PnL bps', borderColor:'#2dd4bf', backgroundColor:'transparent',
+    borderWidth:2, pointRadius:0, tension:.3, fill:false, yAxisID:'yPnl', order:1 },
+  { data:dRVol, label:'volume', backgroundColor:'rgba(45,212,191,.15)', borderColor:'rgba(45,212,191,.4)',
+    borderWidth:1, yAxisID:'yVol', order:2 },
+]},
+options:{ responsive:true, maintainAspectRatio:false, animation:false,
+  plugins:{legend:{display:false}},
+  scales:{
+    x:{...AX(),display:false},
+    yPnl:{...AX({ticks:{color:'#2dd4bf',font:TF,maxTicksLimit:4,callback:v=>v.toFixed(1)+' bps'}}),position:'left'},
+    yVol:{...AX({ticks:{color:'rgba(45,212,191,.5)',font:TF,maxTicksLimit:3,callback:v=>fmt(v)},grid:{display:false}}),
+      position:'right'},
+  },
+}});
+
+function $c(id){ return document.getElementById(id); }
+const $  = id => document.getElementById(id);
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+function badge(id, state, lbl) {
+  const el=$(id); if(!el) return;
+  el.className='bdg '+state;
+  const dot=el.querySelector('.dot'), b=el.querySelector('.bl');
+  if(dot) dot.className='dot '+({alert:'dead',warn:'warn',off:'off'}[state]||'ok');
+  if(b) b.textContent=' '+lbl;
+}
+
+function logEv(cls, tag, msg) {
+  const el=$('evlog');
+  const ts=new Date().toLocaleTimeString('en-US',{hour12:false});
+  const d=document.createElement('div'); d.className='ev '+cls;
+  d.innerHTML=`<span class="ts">${ts}</span><span class="tag">${tag}</span><span class="msg">${msg}</span>`;
+  el.insertBefore(d, el.firstChild);
+  while(el.children.length>150) el.removeChild(el.lastChild);
+}
+
+function fmt(n){ if(n>=1e9) return (n/1e9).toFixed(2)+'B'; if(n>=1e6) return (n/1e6).toFixed(2)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'K'; return Number(n).toFixed(0); }
+function fmtT(s){ const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60; return h?`${h}h ${m}m`:m?`${m}m ${ss}s`:`${ss}s`; }
+
+let tickN=0;
+function pushCharts(fb, floor, pr, vRat, rPnl, rVol) {
+  const t=new Date().toLocaleTimeString('en-US',{hour12:false,minute:'2-digit',second:'2-digit'});
+  LBL.push(t); dFee.push(fb); dFloor.push(floor); dPr.push(pr); dVRat.push(vRat);
+  dRPnl.push(rPnl); dRVol.push(rVol);
+  if(LBL.length>N){ LBL.shift();dFee.shift();dFloor.shift();dPr.shift();dVRat.shift();dRPnl.shift();dRVol.shift(); }
+  feeChart.update('none'); priceChart.update('none'); readerChart.update('none');
+}
+
+// ── Apply tick ────────────────────────────────────────────────────────────────
+function apply(d) {
+  tickN++;
+
+  $('tb-slot').textContent=(284_200_000+tickN*380).toLocaleString();
+  $('tb-rpc').textContent=(22+(Math.random()*20|0))+'ms';
+  $('tb-tx').textContent=(97.1+Math.random()*2.7).toFixed(1)+'%';
+
+  // ── left — pool ───────────────────────────────────────────────────────────
+  $('price').textContent='$'+d.price.toFixed(4);
+  $('price').className='val '+(d.oracleAge>12?'y':'b');
+  $('price-age').textContent=d.oracleAge+'s ago';
+  $('spread').textContent=d.spreadBps.toFixed(1);
+  $('spread').className='val sm '+(d.spreadBps>70?'r':'y');
+  $('fee-left').textContent=d.feeBps.toFixed(1);
+  $('reserves').textContent=fmt(d.rx)+' / '+fmt(d.ry);
+  const rawR=d.rx/(d.rx+d.ry);
+  $('pbar-ra').style.width=(rawR*100).toFixed(0)+'%';
+  $('pbar-ra').style.background=Math.abs(rawR-.5)>.15?'var(--orange)':'var(--blue)';
+  $('res-pct').textContent=(rawR*100).toFixed(0)+'% A / '+((1-rawR)*100).toFixed(0)+'% B';
+  $('swaps').textContent=d.swapN;
+  $('liq').textContent=fmt((d.rx+d.ry)/1e6)+'M';
+
+  // ── left — mm strategy ───────────────────────────────────────────────────
+  badge('bdg-cb', d.halted?'alert':'info', d.halted?'TRIPPED':'ARMED');
+  const skP=d.vRat*100;
+  $('pbar-skew').style.width=skP.toFixed(0)+'%';
+  $('pbar-skew').style.background=Math.abs(skP-50)>13?'var(--orange)':'var(--purple)';
+  const dsk=skP-50;
+  $('skew-val').textContent=Math.abs(dsk)<3?'neutral':dsk>0?`+${dsk.toFixed(0)}% A-heavy`:`${dsk.toFixed(0)}% B-heavy`;
+  const pnlEl=$('lp-pnl');
+  pnlEl.textContent=(d.lpPnl>=0?'+':'')+d.lpPnl.toFixed(1);
+  pnlEl.className='val sm '+(d.lpPnl>8?'g':d.lpPnl<-10?'r':'y');
+  $('rebal-n').textContent=d.rebalN;
+  $('uptime').textContent=fmtT(d.upSec);
+
+  // ── left — reader ─────────────────────────────────────────────────────────
+  const r=d.rdr;
+  const rActive=r.active&&r.trades>0;
+  badge('bdg-rdr', rActive?'teal':'off', rActive?`TRADING · ${r.trades} trades`:'WAITING');
+  const rdot=$('dot-rdr2'); if(rdot) rdot.className='dot '+(rActive?'ok':'off');
+  $('dot-rdr').className='dot '+(rActive?'ok':'off');
+  $('tb-rdr').textContent=rActive?'ACTIVE':'idle';
+  $('r-trades').textContent=r.trades;
+  const rpEl=$('r-pnl');
+  rpEl.textContent=r.pnlBps.toFixed(2);
+  rpEl.className='val sm '+(r.pnlBps>0?'t':r.pnlBps<-5?'r':'y');
+  $('r-pnl-bps').textContent=(r.pnlBps>=0?'+':'')+r.pnlBps.toFixed(2)+' bps';
+  $('r-vol').textContent=fmt(r.volB);
+  $('r-spread').textContent=r.spreadPaid.toFixed(0);
+  $('r-sig').textContent=r.lastSig||'—';
+  $('r-move').textContent='last move: '+(r.lastMoveBps||'—')+' bps';
+
+  // ── center badges ─────────────────────────────────────────────────────────
+  const fBadge=$('fee-badge');
+  fBadge.textContent=d.feeBps.toFixed(1)+' bps';
+  fBadge.style.color=d.feeBps>60?'var(--red)':d.feeBps>40?'var(--orange)':'var(--purple)';
+  $('imb-now').textContent='skew '+((d.vRat-.5)*100).toFixed(1)+'%';
+  $('r-pnl-badge').textContent=(r.pnlBps>=0?'+':'')+r.pnlBps.toFixed(2)+' bps';
+  $('r-pnl-badge').style.color=r.pnlBps>0?'var(--teal)':r.pnlBps<-3?'var(--red)':'var(--yellow)';
+
+  pushCharts(d.feeBps, BASE_BPS+d.volFeeBps, d.price, d.vRat, r.pnlBps, r.volB/1000);
+
+  // ── right — signals ───────────────────────────────────────────────────────
+  badge('sig-shock', d.shockLeft>0?'alert':'off',
+    d.shockLeft>0?`SHOCK (${d.shockLeft} steps)`:'SHOCK CLEAR');
+  const vb=d.ewmaVol*V2B;
+  badge('sig-vol', vb>40?'alert':vb>25?'warn':'ok',
+    (vb>40?'HIGH VOL ':vb>25?'VOL ':'VOL CALM ')+vb.toFixed(0)+' bps');
+  badge('sig-orc', d.oracleAge>15?'alert':d.oracleAge>8?'warn':'ok',
+    d.oracleAge>15?`ORACLE STALE ${d.oracleAge}s`:
+    d.oracleAge>8?`ORACLE ${d.oracleAge}s`:`ORACLE ${d.oracleAge}s`);
+  const imb=Math.abs(d.vRat-.5);
+  badge('sig-imb', imb>.18?'alert':imb>.10?'warn':'ok',
+    imb>.18?`IMBAL ${(imb*100).toFixed(0)}%`:imb>.10?`SKEW ${(imb*100).toFixed(0)}%`:'BALANCED');
+  badge('sig-cb', d.halted?'alert':'info', d.halted?'CB TRIPPED':'CB ARMED');
+
+  // ── events ────────────────────────────────────────────────────────────────
+  if(d.justShk)
+    logEv('shk','SHOCK',`≥0.5% move · shock_steps=${SHOCK_MAX} · fee ${d.feeBps.toFixed(0)} bps`);
+  if(d.swapEv)
+    logEv(d.swapEv.isBuy?'buy':'sell', d.swapEv.isBuy?'BUY':'SELL',
+      `${fmt(d.swapEv.dA)} A · $${d.price.toFixed(3)} · fee ${d.feeBps.toFixed(0)} bps`);
+  if(d.rebalEv)
+    logEv('rbl','REBAL',`pool rebalanced · skew was ${((d.vRat-.5)*100).toFixed(0)}%`);
+  if(d.rdrEv)
+    logEv('rdr', d.rdrEv.isBuy?'RDR↑':'RDR↓',
+      `${fmt(d.rdrEv.tradeB)} B · move ${d.rdrEv.moveBps} bps · spread ${d.rdrEv.fb.toFixed(0)} bps`);
+  if(tickN%10===0)
+    logEv('orc','ORACLE',`$${d.price.toFixed(4)} · ${d.oracleAge}s · spread ${d.spreadBps.toFixed(0)} bps`);
+
+  $('ft-tick').textContent=tickN;
+  $('ft-ts').textContent=new Date().toLocaleTimeString();
+}
+
+// ── Live SSE ──────────────────────────────────────────────────────────────────
+let liveMode=false, retries=0;
+
+function liveToTick(s) {
+  const price=s.oracle.price/1e9;
+  const fb=(s.oracle.spread_bps||0)/2;
+  const volFb=Math.max(0,fb-BASE_BPS);
+  const ra=s.pool.reserve_a, rb=s.pool.reserve_b;
+  const valA=ra*price, valB=rb;
+  const vRat=valA/(valA+valB);
+  const r=s.reader||{};
+  return {
+    price, feeBps:fb, volFeeBps:volFb, spreadBps:fb*2,
+    ewmaVol:volFb/V2B, shockLeft:0,
+    rx:ra, ry:rb, vRat,
+    lpPnl:s.lp?s.lp.pnl_bps:0, rebalN:0, swapN:s.trading?.total_swaps||0,
+    upSec:s.uptime_s||0, oracleAge:s.oracle.last_update_age_s,
+    halted:!!s.halted, justShk:false, swapEv:null, rebalEv:false, rdrEv:null,
+    rdr:{ active:r.trades>0, trades:r.trades||0, pnlBps:r.pnl_bps||0,
+          volB:r.volume_b||0, spreadPaid:r.spread_paid_b||0,
+          lastSig:r.last_sig||'', lastMoveBps:r.last_move_bps||0 },
+  };
+}
+
+function connectSSE() {
+  const es=new EventSource('http://127.0.0.1:19001/feed');
+  let ok=false;
+  es.addEventListener('snapshot',e=>{
+    if(!ok){
+      ok=true; liveMode=true; stopSim();
+      $('dot-mm').className='dot ok';
+      $('tb-mm').textContent='LIVE';
+      $('tb-mode').textContent='LIVE MODE';
+      $('tb-mode').style.color='var(--green)';
+      $('ft-mode').textContent='live';
+    }
+    try{ apply(liveToTick(JSON.parse(e.data))); }catch(e){}
+  });
+  es.onerror=()=>{
+    if(!liveMode&&retries++===0) startSim();
+    else if(liveMode){ $('dot-mm').className='dot warn'; $('tb-mm').textContent='RECONNECT'; }
+    es.close(); setTimeout(connectSSE,5000);
+  };
+}
+
+// ── Sim driver ────────────────────────────────────────────────────────────────
+let simIv=null;
+function startSim() {
+  if(simIv) return;
+  $('dot-mm').className='dot warn'; $('tb-mm').textContent='SIM';
+  apply(simTick());
+  simIv=setInterval(()=>apply(simTick()),820);
+}
+function stopSim(){ if(simIv){ clearInterval(simIv); simIv=null; } }
+
+connectSSE();
+setTimeout(()=>{ if(!liveMode&&!simIv) startSim(); },1400);
+</script>
+</body>
+</html>
