@@ -21,6 +21,11 @@
   --yellow: #fbbf24;
   --orange: #fb923c;
   --teal:   #2dd4bf;
+  --bam:     #a78bfa;
+  --harmonic:#2dd4bf;
+  --jito:    #60a5fa;
+  --frank:   #fbbf24;
+  --rakurai: #fb923c;
 }
 html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
   font-family: 'SF Mono','Fira Code','Cascadia Code',monospace; font-size: 12px; }
@@ -29,12 +34,24 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #topbar {
   height: 34px; flex-shrink: 0;
   background: var(--panel); border-bottom: 1px solid var(--b1);
-  display: flex; align-items: center; padding: 0 14px; gap: 18px;
+  display: flex; align-items: center; padding: 0 14px; gap: 14px;
 }
 .brand { font-size: 11px; font-weight: 700; color: var(--purple);
   letter-spacing: .2em; text-transform: uppercase; }
 .pill { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--dim); }
 .pill .v { color: var(--text); }
+.pill .v.mono { font-variant-numeric: tabular-nums; }
+.navbtn {
+  width: 16px; height: 16px; border: 1px solid var(--b2); background: transparent;
+  color: var(--dim2); font-family: inherit; font-size: 10px; cursor: pointer;
+  border-radius: 3px; transition: all .15s; line-height: 1;
+}
+.navbtn:hover { color: var(--text); border-color: var(--purple); }
+.navbtn:disabled { opacity: .3; cursor: default; }
+.livetag { font-size: 9px; font-weight: 700; letter-spacing: .12em; margin-left: 3px; }
+.livetag.live { color: var(--green); animation: pulse 2s infinite; }
+.livetag.pinned { color: var(--yellow); cursor: pointer; }
+.livetag.pinned:hover { color: var(--text); }
 #tb-mode { margin-left: auto; font-size: 10px; font-weight: 600;
   letter-spacing: .08em; color: var(--yellow); }
 .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
@@ -44,9 +61,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .dot.dead { background: var(--red); box-shadow: 0 0 5px var(--red); }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
 
-/* layout */
-#wrap { display: flex; flex-direction: column; height: 100vh; }
-#main { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px 1fr 218px; }
+/* layout: cockpit (strategy) on top, exec layer on bottom */
+#wrap   { display: flex; flex-direction: column; height: 100vh; }
+#main   { flex: 0 0 60%; min-height: 0; display: grid; grid-template-columns: 200px 1fr 218px; }
+#exec   { flex: 1; min-height: 0; border-top: 1px solid var(--b1);
+          display: grid; grid-template-columns: 248px 1fr; background: var(--panel); }
 #footer { height: 22px; flex-shrink: 0; background: var(--panel);
   border-top: 1px solid var(--b1); display: flex; align-items: center;
   padding: 0 12px; gap: 14px; font-size: 10px; color: var(--dim); }
@@ -73,6 +92,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .stat .val { font-size: 20px; font-weight: 700; line-height: 1; }
 .stat .val.sm { font-size: 14px; }
 .stat .val.xs { font-size: 12px; }
+.stat .val.mono { font-variant-numeric: tabular-nums; }
 .stat .sub { font-size: 9px; color: var(--dim2); margin-top: 2px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 7px; }
 .row2 .stat { margin-bottom: 0; }
@@ -125,6 +145,78 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .rbl  .tag { color: var(--yellow);} .rdr  .tag { color: var(--teal); }
 .cb   .tag { color: var(--red); font-weight: 700; }
 
+/* ── exec layer ─────────────────────────────────────────────────────── */
+#execLeft  { border-right: 1px solid var(--b1); overflow-y: auto; padding: 8px 10px; }
+#execLeft::-webkit-scrollbar { width: 3px; }
+#execLeft::-webkit-scrollbar-thumb { background: var(--b2); }
+#execRight { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+#execMk    { flex: 0 0 110px; border-bottom: 1px solid var(--b1); padding: 6px 11px 4px;
+             display: flex; flex-direction: column; }
+#execMk .ctitle { font-size: 9px; color: var(--dim2); text-transform: uppercase;
+                  letter-spacing: .09em; margin-bottom: 3px;
+                  display: flex; justify-content: space-between; align-items: center; }
+#execMk canvas { flex: 1; min-height: 0; width: 100% !important; }
+#fillsBox  { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#fillsHdr  { padding: 5px 12px 4px; border-bottom: 1px solid var(--b1);
+             display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+             font-size: 10px; color: var(--dim); }
+#fillsHdr .ttl { color: var(--text); font-weight: 700; letter-spacing: .12em;
+                 text-transform: uppercase; font-size: 10px; }
+.tsstat { color: var(--dim2); font-variant-numeric: tabular-nums; }
+.tsstat .v { color: var(--text); }
+#fillsWrap { flex: 1; min-height: 0; overflow: auto; }
+#fillsWrap::-webkit-scrollbar { width: 4px; height: 4px; }
+#fillsWrap::-webkit-scrollbar-thumb { background: var(--b2); }
+table.fills { width: 100%; border-collapse: collapse; font-size: 10.5px;
+              font-variant-numeric: tabular-nums; }
+table.fills th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--panel); color: var(--dim);
+  text-transform: uppercase; letter-spacing: .12em; font-size: 9px; font-weight: 600;
+  text-align: left; padding: 6px 8px 5px; border-bottom: 1px solid var(--b1);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+table.fills th:hover { color: var(--text); }
+table.fills th.sorted { color: var(--purple); }
+table.fills th.sorted::after { content: ' ↓'; }
+table.fills th.sorted.asc::after { content: ' ↑'; }
+table.fills td {
+  padding: 4px 8px; border-bottom: 1px solid #0d121b;
+  white-space: nowrap; color: var(--dim2);
+}
+table.fills tr:hover td { background: rgba(255,255,255,.02); cursor: pointer; }
+table.fills tr.active td { background: rgba(167,139,250,.05); }
+table.fills td.mono { color: var(--text); }
+table.fills .side-buy  { color: var(--green); }
+table.fills .side-sell { color: var(--red); }
+table.fills .mk-pos { color: var(--green); }
+table.fills .mk-neg { color: var(--red); }
+table.fills .sig { color: var(--blue); }
+table.fills td.muted { color: var(--dim); }
+table.fills td.src-rdr { font-style: italic; }
+
+/* builder chip */
+.bchip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase; border: 1px solid;
+  font-variant-numeric: tabular-nums;
+}
+.bchip.bam      { color: var(--bam);      background: rgba(167,139,250,.10); border-color: rgba(167,139,250,.30); }
+.bchip.harmonic { color: var(--harmonic); background: rgba(45,212,191,.10);  border-color: rgba(45,212,191,.30); }
+.bchip.jito     { color: var(--jito);     background: rgba(96,165,250,.10);  border-color: rgba(96,165,250,.30); }
+.bchip.frank    { color: var(--frank);    background: rgba(251,191,36,.10);  border-color: rgba(251,191,36,.30); }
+.bchip.rakurai  { color: var(--rakurai);  background: rgba(251,146,60,.10);  border-color: rgba(251,146,60,.30); }
+.bchip.unknown  { color: var(--dim2);     background: transparent;            border-color: var(--b2); }
+
+/* mix bars */
+.mixrow { display: flex; align-items: center; gap: 6px; font-size: 10px; margin-bottom: 4px; }
+.mixrow .nm { color: var(--dim2); width: 56px; }
+.mixrow .bar { flex: 1; height: 4px; background: var(--b1); border-radius: 2px; overflow: hidden; }
+.mixrow .bar.transp { background: transparent; }
+.mixrow .bf { height: 100%; transition: width .4s; }
+.mixrow .pct { color: var(--text); font-variant-numeric: tabular-nums; width: 38px; text-align: right; }
+
 /* color helpers */
 .g{color:var(--green)} .r{color:var(--red)} .b{color:var(--blue)}
 .y{color:var(--yellow)} .p{color:var(--purple)} .t{color:var(--teal)}
@@ -139,13 +231,21 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   <div class="pill">pool <span class="v">SOL / USDC</span></div>
   <div class="pill"><span class="dot off" id="dot-mm"></span> mm <span class="v" id="tb-mm">—</span></div>
   <div class="pill"><span class="dot off" id="dot-rdr"></span> reader <span class="v" id="tb-rdr">—</span></div>
-  <div class="pill">slot <span class="v" id="tb-slot">—</span></div>
-  <div class="pill">rpc <span class="v" id="tb-rpc">—</span></div>
-  <div class="pill">tx <span class="v" id="tb-tx">—</span></div>
+  <div class="pill">
+    slot
+    <button class="navbtn" id="navPrev" title="prev slot">◀</button>
+    <span class="v mono" id="tb-slot">—</span>
+    <button class="navbtn" id="navNext" title="next / live">▶</button>
+    <span class="livetag live" id="tb-live">● LIVE</span>
+  </div>
+  <div class="pill">builder <span id="tb-builder"><span class="bchip unknown">—</span></span></div>
+  <div class="pill">rpc <span class="v mono" id="tb-rpc">—</span></div>
+  <div class="pill">tx <span class="v mono" id="tb-tx">—</span></div>
+  <div class="pill">fills <span class="v mono" id="tb-fills">0</span></div>
   <span id="tb-mode">SIM MODE</span>
 </div>
 
-<!-- ── 3-column body ──────────────────────────────────────────────────── -->
+<!-- ── strategy cockpit (top 60%) ─────────────────────────────────────── -->
 <div id="main">
 
 <!-- ── LEFT ── -->
@@ -292,12 +392,115 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 </div><!-- /main -->
 
+<!-- ── exec layer (bottom 40%) ────────────────────────────────────────── -->
+<div id="exec">
+
+  <div id="execLeft">
+    <div class="sec">Slot Detail</div>
+    <div class="stat">
+      <div class="lbl">Slot Number</div>
+      <div class="val xs mono" id="sd-slot">—</div>
+      <div class="sub" id="sd-time">—</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Builder</div>
+      <div id="sd-builder"><span class="bchip unknown">—</span></div>
+    </div>
+    <div class="row2">
+      <div class="stat">
+        <div class="lbl">Build ms</div>
+        <div class="val sm mono" id="sd-build">—</div>
+        <div class="sub" id="sd-buildJudge">—</div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Fills</div>
+        <div class="val sm p mono" id="sd-fills">0</div>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="lbl">CU Used</div>
+      <div class="val xs mono" id="sd-cu">—</div>
+      <div class="pbar"><div class="pbar-f" id="pbar-cu" style="background:var(--blue);width:0%"></div></div>
+      <div class="sub" id="sd-cuPct">— of 48M</div>
+    </div>
+    <div class="row2">
+      <div class="stat">
+        <div class="lbl">Mk 5s avg</div>
+        <div class="val sm mono" id="sd-mk5">—</div>
+        <div class="sub">bps</div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Mk 30s avg</div>
+        <div class="val sm mono" id="sd-mk30">—</div>
+        <div class="sub">bps</div>
+      </div>
+    </div>
+
+    <div class="sec">Builder Mix (last 120 slots)</div>
+    <div class="mixrow"><span class="nm">BAM</span>      <span class="bar"><span class="bf" id="mix-bam"      style="background:var(--bam);width:0%"></span></span>      <span class="pct" id="mix-bam-pct">0%</span></div>
+    <div class="mixrow"><span class="nm">Harmonic</span> <span class="bar"><span class="bf" id="mix-harmonic" style="background:var(--harmonic);width:0%"></span></span> <span class="pct" id="mix-harmonic-pct">0%</span></div>
+    <div class="mixrow"><span class="nm">Jito</span>     <span class="bar"><span class="bf" id="mix-jito"     style="background:var(--jito);width:0%"></span></span>     <span class="pct" id="mix-jito-pct">0%</span></div>
+    <div class="mixrow"><span class="nm">Frank</span>    <span class="bar"><span class="bf" id="mix-frank"    style="background:var(--frank);width:0%"></span></span>    <span class="pct" id="mix-frank-pct">0%</span></div>
+    <div class="mixrow"><span class="nm">Rakurai</span>  <span class="bar"><span class="bf" id="mix-rakurai"  style="background:var(--rakurai);width:0%"></span></span>  <span class="pct" id="mix-rakurai-pct">0%</span></div>
+
+    <div class="sec">Avg Markout 5s by Builder</div>
+    <div class="mixrow"><span class="nm">BAM</span>      <span class="bar transp"><span class="bf" id="mk-bam"      style="background:var(--bam);width:0%"></span></span>      <span class="pct" id="mk-bam-v">—</span></div>
+    <div class="mixrow"><span class="nm">Harmonic</span> <span class="bar transp"><span class="bf" id="mk-harmonic" style="background:var(--harmonic);width:0%"></span></span> <span class="pct" id="mk-harmonic-v">—</span></div>
+    <div class="mixrow"><span class="nm">Jito</span>     <span class="bar transp"><span class="bf" id="mk-jito"     style="background:var(--jito);width:0%"></span></span>     <span class="pct" id="mk-jito-v">—</span></div>
+  </div>
+
+  <div id="execRight">
+    <div id="execMk">
+      <div class="ctitle">
+        <span>Markout per Fill &nbsp;<span style="color:var(--dim);font-size:8px">── 5s bars · 30s line ──</span></span>
+        <span id="mkBadge" style="font-size:10px;color:var(--green);font-variant-numeric:tabular-nums">— bps</span>
+      </div>
+      <canvas id="mkChart"></canvas>
+    </div>
+
+    <div id="fillsBox">
+      <div id="fillsHdr">
+        <span class="ttl">Fills</span>
+        <span class="tsstat">total <span class="v" id="fs-total">0</span></span>
+        <span class="tsstat">avg sim <span class="v" id="fs-sim">— ms</span></span>
+        <span class="tsstat">avg landed <span class="v" id="fs-landed">— ms</span></span>
+        <span class="tsstat">avg mk5 <span class="v" id="fs-mk5">— bps</span></span>
+        <span class="tsstat">win rate <span class="v" id="fs-win">— %</span></span>
+        <span style="margin-left:auto;color:var(--dim);font-size:10px">click header to sort · click row to pin slot</span>
+      </div>
+      <div id="fillsWrap">
+        <table class="fills">
+          <thead>
+            <tr>
+              <th data-k="slot">slot</th>
+              <th data-k="offset">slot+ms</th>
+              <th data-k="sig">sig</th>
+              <th data-k="src">src</th>
+              <th data-k="side">side</th>
+              <th data-k="size">size_b</th>
+              <th data-k="fee">fee bps</th>
+              <th data-k="sim">sim ms</th>
+              <th data-k="landed">landed ms</th>
+              <th data-k="builder">builder</th>
+              <th data-k="mk5">mk 5s</th>
+              <th data-k="mk30">mk 30s</th>
+            </tr>
+          </thead>
+          <tbody id="fillsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /exec -->
+
 <div id="footer">
   <span>PAMM Terminal</span>
   <span>· <span class="fv" id="ft-mode">sim</span></span>
   <span>· ticks <span class="fv" id="ft-tick">0</span></span>
+  <span>· slots <span class="fv" id="ft-slots">0</span></span>
   <span>· <span class="fv" id="ft-ts">—</span></span>
-  <span style="margin-left:auto">src/lib.rs · EWMA Dynamic Fee v2</span>
+  <span style="margin-left:auto">src/lib.rs · EWMA Dynamic Fee v2 · exec layer: Peekaboo-style</span>
 </div>
 </div><!-- /wrap -->
 
@@ -349,7 +552,7 @@ function simTick() {
     else         { MM.rx += dA;      MM.ry -= dA*MM.price*.998; }
     MM.lpPnl += BASE_BPS * 0.07;
     MM.swapN++;
-    swapEv = { isBuy: dir > 0, dA };
+    swapEv = { isBuy: dir > 0, dA, sizeB: dA * MM.price };
   }
 
   // rebalance
@@ -363,7 +566,7 @@ function simTick() {
   }
 
   // ── Reader bot: trades on momentum signal ─────────────────────────────────
-  RDR.momentum = RDR.momentum * 0.75 + dir * 0.25;  // momentum EWMA
+  RDR.momentum = RDR.momentum * 0.75 + dir * 0.25;
   const moveBps = mag * 10000;
   let rdrEv = null;
 
@@ -396,7 +599,7 @@ function simTick() {
   };
 }
 
-// ── Chart buffers ─────────────────────────────────────────────────────────────
+// ── Strategy charts (existing) ────────────────────────────────────────────────
 const N=90, LBL=[], dFee=[], dFloor=[], dPr=[], dVRat=[], dRPnl=[], dRVol=[];
 
 const threshPl = { id:'thr', afterDraw(c) {
@@ -408,6 +611,9 @@ const threshPl = { id:'thr', afterDraw(c) {
 
 const GC='#12182480', TC='#3a4d60', TF={size:9,family:'SF Mono,monospace'};
 const AX=(e={})=>({ ticks:{color:TC,font:TF,maxTicksLimit:5}, grid:{color:GC}, border:{color:'#161e2c'}, ...e });
+
+function $c(id){ return document.getElementById(id); }
+const $  = id => document.getElementById(id);
 
 const feeChart = new Chart($c('feeChart'),{ type:'line', data:{ labels:LBL, datasets:[
   { data:dFee, borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.12)',
@@ -453,10 +659,7 @@ options:{ responsive:true, maintainAspectRatio:false, animation:false,
   },
 }});
 
-function $c(id){ return document.getElementById(id); }
-const $  = id => document.getElementById(id);
-
-// ── DOM helpers ───────────────────────────────────────────────────────────────
+// ── DOM helpers (existing) ────────────────────────────────────────────────────
 function badge(id, state, lbl) {
   const el=$(id); if(!el) return;
   el.className='bdg '+state;
@@ -474,8 +677,22 @@ function logEv(cls, tag, msg) {
   while(el.children.length>150) el.removeChild(el.lastChild);
 }
 
-function fmt(n){ if(n>=1e9) return (n/1e9).toFixed(2)+'B'; if(n>=1e6) return (n/1e6).toFixed(2)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'K'; return Number(n).toFixed(0); }
-function fmtT(s){ const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60; return h?`${h}h ${m}m`:m?`${m}m ${ss}s`:`${ss}s`; }
+function fmt(n){ if(n==null||isNaN(n)) return '—'; if(n>=1e9) return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return (n/1e6).toFixed(2)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'K';
+  return Number(n).toFixed(0); }
+function fmtT(s){ const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
+  return h?`${h}h ${m}m`:m?`${m}m ${ss}s`:`${ss}s`; }
+function fmtSlot(n) { return n.toLocaleString('en-US'); }
+function fmtMicroTs(ts) {
+  const d = new Date(ts);
+  const hh = String(d.getUTCHours()).padStart(2,'0');
+  const mm = String(d.getUTCMinutes()).padStart(2,'0');
+  const ss = String(d.getUTCSeconds()).padStart(2,'0');
+  const ms = String(d.getUTCMilliseconds()).padStart(3,'0');
+  return `${hh}:${mm}:${ss}.${ms}`;
+}
+function setText(id,v){ const el=$(id); if(el) el.textContent=v; }
+function builderChip(id,label){ return `<span class="bchip ${id}">${label}</span>`; }
 
 let tickN=0;
 function pushCharts(fb, floor, pr, vRat, rPnl, rVol) {
@@ -486,15 +703,13 @@ function pushCharts(fb, floor, pr, vRat, rPnl, rVol) {
   feeChart.update('none'); priceChart.update('none'); readerChart.update('none');
 }
 
-// ── Apply tick ────────────────────────────────────────────────────────────────
+// ── Apply tick — strategy cockpit (existing, unchanged) ──────────────────────
 function apply(d) {
   tickN++;
 
-  $('tb-slot').textContent=(284_200_000+tickN*380).toLocaleString();
   $('tb-rpc').textContent=(22+(Math.random()*20|0))+'ms';
   $('tb-tx').textContent=(97.1+Math.random()*2.7).toFixed(1)+'%';
 
-  // ── left — pool ───────────────────────────────────────────────────────────
   $('price').textContent='$'+d.price.toFixed(4);
   $('price').className='val '+(d.oracleAge>12?'y':'b');
   $('price-age').textContent=d.oracleAge+'s ago';
@@ -509,7 +724,6 @@ function apply(d) {
   $('swaps').textContent=d.swapN;
   $('liq').textContent=fmt((d.rx+d.ry)/1e6)+'M';
 
-  // ── left — mm strategy ───────────────────────────────────────────────────
   badge('bdg-cb', d.halted?'alert':'info', d.halted?'TRIPPED':'ARMED');
   const skP=d.vRat*100;
   $('pbar-skew').style.width=skP.toFixed(0)+'%';
@@ -522,7 +736,6 @@ function apply(d) {
   $('rebal-n').textContent=d.rebalN;
   $('uptime').textContent=fmtT(d.upSec);
 
-  // ── left — reader ─────────────────────────────────────────────────────────
   const r=d.rdr;
   const rActive=r.active&&r.trades>0;
   badge('bdg-rdr', rActive?'teal':'off', rActive?`TRADING · ${r.trades} trades`:'WAITING');
@@ -539,7 +752,6 @@ function apply(d) {
   $('r-sig').textContent=r.lastSig||'—';
   $('r-move').textContent='last move: '+(r.lastMoveBps||'—')+' bps';
 
-  // ── center badges ─────────────────────────────────────────────────────────
   const fBadge=$('fee-badge');
   fBadge.textContent=d.feeBps.toFixed(1)+' bps';
   fBadge.style.color=d.feeBps>60?'var(--red)':d.feeBps>40?'var(--orange)':'var(--purple)';
@@ -549,7 +761,6 @@ function apply(d) {
 
   pushCharts(d.feeBps, BASE_BPS+d.volFeeBps, d.price, d.vRat, r.pnlBps, r.volB/1000);
 
-  // ── right — signals ───────────────────────────────────────────────────────
   badge('sig-shock', d.shockLeft>0?'alert':'off',
     d.shockLeft>0?`SHOCK (${d.shockLeft} steps)`:'SHOCK CLEAR');
   const vb=d.ewmaVol*V2B;
@@ -563,7 +774,6 @@ function apply(d) {
     imb>.18?`IMBAL ${(imb*100).toFixed(0)}%`:imb>.10?`SKEW ${(imb*100).toFixed(0)}%`:'BALANCED');
   badge('sig-cb', d.halted?'alert':'info', d.halted?'CB TRIPPED':'CB ARMED');
 
-  // ── events ────────────────────────────────────────────────────────────────
   if(d.justShk)
     logEv('shk','SHOCK',`≥0.5% move · shock_steps=${SHOCK_MAX} · fee ${d.feeBps.toFixed(0)} bps`);
   if(d.swapEv)
@@ -581,7 +791,315 @@ function apply(d) {
   $('ft-ts').textContent=new Date().toLocaleTimeString();
 }
 
-// ── Live SSE ──────────────────────────────────────────────────────────────────
+// ── Execution layer ──────────────────────────────────────────────────────────
+// Each strategy tick = 1 sim slot. Builder/markout priors from Blockworks
+// Research Feb-Mar 2026 data on Solana block builders.
+const BUILDERS = [
+  { id:'bam',      label:'BAM',      share:.274, buildMs:[180,362,420], markBias:[+1.8,2.4], failBias:0.7 },
+  { id:'harmonic', label:'HARMONIC', share:.168, buildMs:[200,407,560], markBias:[+0.4,3.2], failBias:1.4 },
+  { id:'jito',     label:'JITO',     share:.380, buildMs:[200,395,470], markBias:[+1.0,2.6], failBias:1.0 },
+  { id:'frank',    label:'FRANK',    share:.110, buildMs:[210,400,475], markBias:[+0.9,2.7], failBias:1.0 },
+  { id:'rakurai',  label:'RAKURAI',  share:.068, buildMs:[170,355,420], markBias:[+1.4,2.9], failBias:0.8 },
+];
+function pickBuilder() {
+  const r = Math.random(); let acc = 0;
+  for (const b of BUILDERS) { acc += b.share; if (r < acc) return b; }
+  return BUILDERS[BUILDERS.length-1];
+}
+function gauss(mu, sigma) {
+  let u=0,v=0; while(!u) u=Math.random(); while(!v) v=Math.random();
+  return mu + sigma * Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function pickBuildMs(b) {
+  const [a,m,c] = b.buildMs;
+  const u = Math.random(), F = (m-a)/(c-a);
+  return u < F ? a + Math.sqrt(u*(c-a)*(m-a)) : c - Math.sqrt((1-u)*(c-a)*(c-m));
+}
+const FAIL_REASONS = [
+  'DuplicateInAuction','InsufficientFunds','AccountInUse','BlockhashNotFound',
+  'AlreadyProcessed','ProgramFailedToCompute','TooManyAccountLocks',
+];
+function randSig() {
+  const cs = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789';
+  let s = ''; for (let i=0;i<4;i++) s += cs[Math.random()*cs.length|0];
+  s += '…'; for (let i=0;i<2;i++) s += cs[Math.random()*cs.length|0];
+  return s;
+}
+
+let slotN = 420_889_900;
+const slots = [];
+const fills = [];
+const SLOT_KEEP = 120, FILL_KEEP = 400;
+let focusSlot = null;
+let sortKey = 'slot', sortAsc = false;
+
+function makeFill(slotMeta, b, src, isBuy, sizeB, feeBps_) {
+  const slotOffset = 30 + Math.random() * (slotMeta.buildMs - 60);
+  const sim   = Math.max(.008, gauss(.060, .035));
+  const landedBase = 14 + (b.id==='harmonic' ? 6 : b.id==='bam' ? -2 : 0);
+  const landed = Math.max(6, gauss(landedBase, 5.5));
+  const [mkMu, mkSig] = b.markBias;
+  const mk5  = +gauss(mkMu, mkSig).toFixed(2);
+  const mk30 = +gauss(mkMu*0.45, mkSig*1.4).toFixed(2);
+  return {
+    slot: slotMeta.n, offset:+slotOffset.toFixed(1), sig: randSig(),
+    src, side: isBuy ? 'BUY' : 'SELL',
+    size:+sizeB.toFixed(0), fee:+feeBps_.toFixed(1),
+    sim:+sim.toFixed(3), landed:+landed.toFixed(2),
+    builder: b.id, builderLabel: b.label,
+    mk5, mk30, ts: slotMeta.ts,
+  };
+}
+
+function makeExecSlot(stratD) {
+  const b = pickBuilder();
+  const buildMs = pickBuildMs(b);
+  const isHandoff = Math.random() < .25;
+  const finalBuild = isHandoff ? buildMs * 1.08 : buildMs;
+  const buildEventsTot = 350 + (Math.random()*450 |0);
+  const failPct = (.30 + (Math.random()*.20 - .10)) * b.failBias;
+  const buildFail = Math.round(buildEventsTot * Math.min(.6, Math.max(.05, failPct)));
+  const buildOk = buildEventsTot - buildFail;
+  const reasons = [...FAIL_REASONS].sort(() => Math.random()-.5).slice(0,3)
+    .map((rn,i)=>({ reason: rn, n: Math.round(buildFail * (i===0?.55:i===1?.28:.17)) }));
+  const cuTotal = 8e6 + Math.random() * 30e6;
+
+  const slotMeta = {
+    n: slotN, ts: Date.now(),
+    builder: b.id, builderLabel: b.label,
+    buildMs: +finalBuild.toFixed(1),
+    buildOk, buildFail, reasons,
+    cuTotal: +cuTotal.toFixed(0), cuMax: 48_000_000,
+    isHandoff,
+    fills: [],
+  };
+
+  // Hook the strategy events into the exec slot.
+  if (stratD.swapEv) {
+    const ev = stratD.swapEv;
+    slotMeta.fills.push(makeFill(slotMeta, b, 'mm', ev.isBuy, ev.sizeB, stratD.feeBps));
+  }
+  if (stratD.rdrEv) {
+    const ev = stratD.rdrEv;
+    slotMeta.fills.push(makeFill(slotMeta, b, 'rdr', ev.isBuy, ev.tradeB, ev.fb));
+  }
+  slotMeta.mk5avg  = slotMeta.fills.length ? +(slotMeta.fills.reduce((s,f)=>s+f.mk5,0)/slotMeta.fills.length).toFixed(2) : null;
+  slotMeta.mk30avg = slotMeta.fills.length ? +(slotMeta.fills.reduce((s,f)=>s+f.mk30,0)/slotMeta.fills.length).toFixed(2) : null;
+
+  slotN++;
+  return slotMeta;
+}
+
+// ── Markout chart ───────────────────────────────────────────────────────────
+const N_MK = 50;
+const mkLbl = [], mk5Data = [], mk30Data = [];
+const mkChart = new Chart($c('mkChart'), {
+  type: 'bar',
+  data: { labels: mkLbl, datasets: [
+    { data: mk5Data, label:'mk 5s',
+      backgroundColor: ctx => mk5Data[ctx.dataIndex] >= 0 ? 'rgba(52,211,153,.6)' : 'rgba(248,113,113,.6)',
+      borderColor: ctx => mk5Data[ctx.dataIndex] >= 0 ? '#34d399' : '#f87171',
+      borderWidth: 1, order: 2 },
+    { type:'line', data: mk30Data, label:'mk 30s', borderColor:'#fbbf24',
+      backgroundColor:'transparent', borderWidth: 1.4, pointRadius: 0, tension: .25, order: 1 },
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display:false } },
+    scales: {
+      x: { ...AX(), display: false },
+      y: { ...AX({ ticks:{color:TC,font:TF,maxTicksLimit:4,callback:v=>v.toFixed(1)+' bps'} }) },
+    },
+  },
+});
+
+// ── Exec renderers ──────────────────────────────────────────────────────────
+function pickFocusSlot() {
+  if (focusSlot != null) {
+    const f = slots.find(s => s.n === focusSlot);
+    if (f) return f;
+  }
+  return slots[slots.length - 1];
+}
+
+function renderTopbarExec(latest, focus) {
+  const shown = focus || latest;
+  const isLive = (focusSlot == null);
+  setText('tb-slot', fmtSlot(shown.n));
+  $('tb-builder').innerHTML = builderChip(shown.builder, shown.builderLabel);
+  setText('tb-fills', shown.fills.length);
+  $('navNext').disabled = isLive;
+  const lt = $('tb-live');
+  lt.textContent = isLive ? '● LIVE' : '◉ PINNED';
+  lt.className = 'livetag ' + (isLive ? 'live' : 'pinned');
+  lt.onclick = isLive ? null : () => { focusSlot = null; renderExec(); };
+}
+
+function renderSlotDetail(s) {
+  setText('sd-slot', fmtSlot(s.n));
+  setText('sd-time', fmtMicroTs(s.ts) + (s.isHandoff ? ' · handoff' : ' · continuation'));
+  $('sd-builder').innerHTML = builderChip(s.builder, s.builderLabel);
+  setText('sd-build', s.buildMs.toFixed(0));
+  const judge = s.buildMs > 500 ? 'slow · IBRL risk' : s.buildMs > 420 ? 'warn' : 'healthy';
+  const judgeEl = $('sd-buildJudge'); judgeEl.textContent = judge;
+  judgeEl.style.color = s.buildMs > 500 ? 'var(--red)' : s.buildMs > 420 ? 'var(--yellow)' : 'var(--green)';
+  setText('sd-fills', s.fills.length);
+  setText('sd-cu', fmt(s.cuTotal));
+  const cuPct = s.cuTotal / s.cuMax;
+  $('pbar-cu').style.width = (cuPct*100).toFixed(0) + '%';
+  $('pbar-cu').style.background = cuPct > .8 ? 'var(--red)' : cuPct > .6 ? 'var(--orange)' : 'var(--blue)';
+  setText('sd-cuPct', (cuPct*100).toFixed(0) + '% of 48M');
+  const mk5El = $('sd-mk5'), mk30El = $('sd-mk30');
+  if (s.mk5avg == null) {
+    mk5El.textContent = '—'; mk5El.className = 'val sm mono';
+    mk30El.textContent = '—'; mk30El.className = 'val sm mono';
+  } else {
+    mk5El.textContent = (s.mk5avg>=0?'+':'') + s.mk5avg.toFixed(2);
+    mk5El.className = 'val sm mono ' + (s.mk5avg>=0?'g':'r');
+    mk30El.textContent = (s.mk30avg>=0?'+':'') + s.mk30avg.toFixed(2);
+    mk30El.className = 'val sm mono ' + (s.mk30avg>=0?'g':'r');
+  }
+}
+
+function renderBuilderMix() {
+  const counts = { bam:0, harmonic:0, jito:0, frank:0, rakurai:0 };
+  const mkSum  = { bam:0, harmonic:0, jito:0, frank:0, rakurai:0 };
+  const mkN    = { bam:0, harmonic:0, jito:0, frank:0, rakurai:0 };
+  for (const s of slots) {
+    counts[s.builder] = (counts[s.builder] || 0) + 1;
+    for (const f of s.fills) { mkSum[f.builder] += f.mk5; mkN[f.builder] += 1; }
+  }
+  const tot = slots.length || 1;
+  for (const id of Object.keys(counts)) {
+    const pct = counts[id]/tot * 100;
+    const el = $('mix-'+id); if (el) el.style.width = pct.toFixed(0) + '%';
+    const pe = $('mix-'+id+'-pct'); if (pe) pe.textContent = pct.toFixed(0) + '%';
+  }
+  for (const id of ['bam','harmonic','jito']) {
+    const avg = mkN[id] ? mkSum[id]/mkN[id] : null;
+    const elB = $('mk-'+id), elV = $('mk-'+id+'-v');
+    if (avg == null || !elB) { if (elV) elV.textContent = '—'; if (elB) elB.style.width='0%'; continue; }
+    const clamped = Math.max(-3, Math.min(3, avg));
+    elB.style.width = Math.abs(clamped) / 3 * 100 + '%';
+    elB.style.background = avg >= 0 ? 'var(--'+id+')' : 'var(--red)';
+    elV.textContent = (avg>=0?'+':'') + avg.toFixed(2);
+    elV.style.color = avg >= 0 ? 'var(--text)' : 'var(--red)';
+  }
+}
+
+function renderMarkoutChart() {
+  mkLbl.length = 0; mk5Data.length = 0; mk30Data.length = 0;
+  const recent = fills.slice(-N_MK);
+  for (const f of recent) { mkLbl.push(f.sig); mk5Data.push(f.mk5); mk30Data.push(f.mk30); }
+  mkChart.update('none');
+  if (recent.length) {
+    const avg5 = recent.reduce((s,f)=>s+f.mk5,0)/recent.length;
+    const bd = $('mkBadge');
+    bd.textContent = (avg5>=0?'+':'') + avg5.toFixed(2) + ' bps · last ' + recent.length;
+    bd.style.color = avg5 >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+}
+
+function renderFillsTable() {
+  const tbody = $('fillsTbody');
+  const sorted = [...fills].sort((a,b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    if (av == null) return 1; if (bv == null) return -1;
+    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortAsc ? av-bv : bv-av;
+  }).slice(0, 200);
+
+  tbody.innerHTML = sorted.map(f => {
+    const mk5cls = f.mk5 >= 0 ? 'mk-pos' : 'mk-neg';
+    const mk30cls = f.mk30 >= 0 ? 'mk-pos' : 'mk-neg';
+    const activeCls = (focusSlot === f.slot) ? ' class="active"' : '';
+    return `<tr${activeCls} data-slot="${f.slot}">
+      <td class="mono">${fmtSlot(f.slot)}</td>
+      <td>+${f.offset.toFixed(1)}</td>
+      <td class="sig">${f.sig}</td>
+      <td class="${f.src==='rdr'?'src-rdr':'muted'}">${f.src.toUpperCase()}</td>
+      <td class="side-${f.side.toLowerCase()}">${f.side}</td>
+      <td class="mono">${fmt(f.size)}</td>
+      <td>${f.fee.toFixed(1)}</td>
+      <td>${f.sim.toFixed(3)}</td>
+      <td>${f.landed.toFixed(2)}</td>
+      <td>${builderChip(f.builder, f.builderLabel)}</td>
+      <td class="${mk5cls}">${f.mk5>=0?'+':''}${f.mk5.toFixed(2)}</td>
+      <td class="${mk30cls}">${f.mk30>=0?'+':''}${f.mk30.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+      focusSlot = +tr.dataset.slot;
+      renderExec();
+    });
+  });
+  document.querySelectorAll('table.fills th').forEach(th => {
+    th.classList.toggle('sorted', th.dataset.k === sortKey);
+    th.classList.toggle('asc', th.dataset.k === sortKey && sortAsc);
+  });
+}
+
+function renderFillsStats() {
+  setText('fs-total', fills.length);
+  if (!fills.length) return;
+  const avg = arr => arr.reduce((s,x)=>s+x,0)/arr.length;
+  setText('fs-sim', avg(fills.map(f=>f.sim)).toFixed(3) + ' ms');
+  setText('fs-landed', avg(fills.map(f=>f.landed)).toFixed(2) + ' ms');
+  const mk5avg = avg(fills.map(f=>f.mk5));
+  const e1 = $('fs-mk5'); e1.textContent = (mk5avg>=0?'+':'') + mk5avg.toFixed(2) + ' bps';
+  e1.style.color = mk5avg >= 0 ? 'var(--green)' : 'var(--red)';
+  const wins = fills.filter(f=>f.mk5>0).length;
+  setText('fs-win', (wins/fills.length*100).toFixed(0) + ' %');
+}
+
+function renderExec() {
+  if (!slots.length) return;
+  const latest = slots[slots.length-1];
+  const focus  = pickFocusSlot();
+  renderTopbarExec(latest, focus);
+  renderSlotDetail(focus);
+  renderBuilderMix();
+  renderMarkoutChart();
+  renderFillsTable();
+  renderFillsStats();
+  setText('ft-slots', slots.length);
+}
+
+// ── Unified tick driver ─────────────────────────────────────────────────────
+function tickAll(stratD) {
+  apply(stratD);
+  const slot = makeExecSlot(stratD);
+  slots.push(slot);
+  if (slots.length > SLOT_KEEP) slots.shift();
+  for (const f of slot.fills) fills.push(f);
+  while (fills.length > FILL_KEEP) fills.shift();
+  renderExec();
+}
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+$('navPrev').addEventListener('click', () => {
+  const focus = pickFocusSlot();
+  const idx = slots.findIndex(s => s.n === focus.n);
+  if (idx > 0) { focusSlot = slots[idx-1].n; renderExec(); }
+});
+$('navNext').addEventListener('click', () => {
+  if (focusSlot == null) return;
+  const idx = slots.findIndex(s => s.n === focusSlot);
+  if (idx === -1 || idx >= slots.length-1) focusSlot = null;
+  else focusSlot = slots[idx+1].n;
+  renderExec();
+});
+document.querySelectorAll('table.fills th').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    if (sortKey === k) sortAsc = !sortAsc;
+    else { sortKey = k; sortAsc = false; }
+    renderFillsTable();
+  });
+});
+
+// ── Live SSE (existing, unchanged path; exec layer overlays sim metadata) ───
 let liveMode=false, retries=0;
 
 function liveToTick(s) {
@@ -617,8 +1135,9 @@ function connectSSE() {
       $('tb-mode').style.color='var(--green)';
       $('ft-mode').textContent='live';
     }
-    try{ apply(liveToTick(JSON.parse(e.data))); }catch(e){}
+    try{ tickAll(liveToTick(JSON.parse(e.data))); }catch(e){}
   });
+  // future: 'fill' event with builder/sim/landed/markout to drive exec layer with real data.
   es.onerror=()=>{
     if(!liveMode&&retries++===0) startSim();
     else if(liveMode){ $('dot-mm').className='dot warn'; $('tb-mm').textContent='RECONNECT'; }
@@ -626,15 +1145,25 @@ function connectSSE() {
   };
 }
 
-// ── Sim driver ────────────────────────────────────────────────────────────────
+// ── Sim driver ──────────────────────────────────────────────────────────────
 let simIv=null;
 function startSim() {
   if(simIv) return;
   $('dot-mm').className='dot warn'; $('tb-mm').textContent='SIM';
-  apply(simTick());
-  simIv=setInterval(()=>apply(simTick()),820);
+  tickAll(simTick());
+  simIv=setInterval(()=>tickAll(simTick()),820);
 }
 function stopSim(){ if(simIv){ clearInterval(simIv); simIv=null; } }
+
+// Seed exec history so the table isn't empty on first render.
+for (let i=0;i<40;i++) {
+  const s = makeExecSlot(simTick());
+  slots.push(s);
+  for (const f of s.fills) fills.push(f);
+}
+while (slots.length > SLOT_KEEP) slots.shift();
+while (fills.length > FILL_KEEP) fills.shift();
+renderExec();
 
 connectSSE();
 setTimeout(()=>{ if(!liveMode&&!simIv) startSim(); },1400);

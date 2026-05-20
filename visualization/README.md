@@ -9,29 +9,29 @@ Live at **[pamm.aileena.xyz](https://pamm.aileena.xyz)** — sim mode runs witho
 ## Layout
 
 ```
-┌─ PAMM TERMINAL ── pool: SOL/USDC ── bot: SIM ── slot ── rpc ── tx ──────────┐
-│ Pool State    │  Fee Model Trace (ewma_vol · shock decay · fee_bps)          │ Signals   │
-│ oracle price  │  ─────────────────── 30 bps floor ────────────────────────  │ SHOCK     │
-│ spread / fee  │                                                               │ VOL       │
-│ reserves bar  ├───────────────────────────────────────────────────────────── │ ORACLE    │
-│               │  Price & Reserve Imbalance                                   │ IMBALANCE │
-│ MM Strategy   ├───────────────────────────────────────────────────────────── │ CB        │
-│ circuit breaker│  Reader Bot — Cumulative PnL & Volume                       │           │
-│ skew / pnl    │                                                               │ Event Log │
-│               │                                                               │           │
-│ Reader Bot    │                                                               │           │
-│ trades / PnL  │                                                               │           │
-└───────────────┴───────────────────────────────────────────────────────────────┴───────────┘
+┌─ PAMM TERMINAL ── pool ── mm ── reader ── slot[◀ ▶ LIVE] ── builder ── rpc ── tx ── fills ┐
+│ Pool State    │  Fee Model (ewma_vol · shock decay · fee_bps · 30 bps floor)  │ Signals   │ ── strategy
+│ MM Strategy   │  Price & Reserve Imbalance                                    │ Event Log │    cockpit
+│ Reader Bot    │  Reader Bot — Cumulative PnL & Volume                         │           │    (top 60%)
+├───────────────┴───────────────────────────────────────────────────────────────┴───────────┤
+│ Slot Detail   │  Markout per Fill (5s bars · 30s line)                                    │ ── execution
+│ slot/builder  ├───────────────────────────────────────────────────────────────────────────│    layer
+│ build_ms · CU │  FILLS TABLE — slot · +ms · sig · src · side · size · fee · sim · landed  │    (bottom 40%)
+│ Builder Mix   │                · builder · mk 5s · mk 30s                                 │
+│ Avg Mk5/build │  (sortable headers · click row to pin slot)                               │
+└───────────────┴───────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Left** — three sections: Pool State (price, spread, reserves), MM Strategy (circuit breaker, skew, LP PnL), Reader Bot (trades, MtM PnL, volume, last signal)
+**Top half — strategy cockpit:**
+- **Left**: Pool State (price, spread, reserves), MM Strategy (circuit breaker, skew, LP PnL), Reader Bot (trades, MtM PnL, volume, last signal)
+- **Center**: Fee model trace (`fee_bps` filled + `base+vol` floor dashed + 30 bps reference), Price + value-adjusted reserve imbalance, Reader bot cumulative PnL + volume
+- **Right**: Five signal badges (SHOCK / VOL / ORACLE / IMBAL / CB) + unified event log
 
-**Center** — three chart rows:
-- Fee model trace: total `fee_bps` (filled) + `base+vol` floor (dashed) + 30 bps reference line
-- Price + value-adjusted reserve imbalance (dual y-axis)
-- Reader bot cumulative PnL + trade volume (teal, dual y-axis)
+**Bottom half — execution layer** (Peekaboo / Dissonance-style):
+- **Left**: Slot Detail (slot #, builder chip, build_ms, fills count, CU used + bar, avg mk5/mk30), Builder Mix (last 120 slots stacked by BAM/Harmonic/Jito/Frank/Rakurai), Avg Markout 5s by Builder
+- **Right**: Markout per Fill chart (5s bars colored by sign + 30s line overlay), FILLS TABLE with sortable columns (`slot · +ms · sig · src · side · size_b · fee · sim ms · landed ms · builder · mk 5s · mk 30s`). Click any row to pin that slot to the cockpit; click ▶ twice (or the PINNED tag) to resume live.
 
-**Right** — five signal badges + unified event log (MM swaps, reader trades, oracle updates, rebalances)
+**Topbar**: slot navigation (◀ ▶), current builder chip, RPC latency, tx success %, fills count, LIVE / PINNED indicator.
 
 ---
 
@@ -76,10 +76,46 @@ At calm (vol ≈ 0.1%): fee ≈ 28 bps — stays below the 30 bps normalizer flo
 
 | File | Description |
 |------|-------------|
-| `terminal.html` | **Main** — unified terminal (deploy this) |
+| `terminal.html` | **Main** — unified strategy + execution terminal (deploy this) |
 | `risk-terminal.html` | Fee model focused view, standalone |
 | `sim-viz.html` | Static devnet simulation snapshot (Apr 2026) |
 | `dashboard.html` | Original live MM bot dashboard |
+
+---
+
+## Execution layer (bottom half of `terminal.html`)
+
+Inspired by Jito Peekaboo and Harmonic Dissonance. Adds slot / CU / builder / markout visibility to the same single-file dash — no separate page, no tab switching.
+
+**Builders modeled** (stake shares Feb–Mar 2026, public Blockworks Research data): BAM 27%, Harmonic 17%, Jito 38%, Frankendancer 11%, Rakurai 7%. Per-builder priors:
+- **build_ms**: triangular (min, mode, max) — BAM `[180, 362, 420]`, Harmonic `[200, 407, 560]`, Jito `[200, 395, 470]`
+- **markout 5s**: gaussian — BAM `μ=+1.8 σ=2.4`, Harmonic `μ=+0.4 σ=3.2` (heavier left tail), Jito `μ=+1.0 σ=2.6`
+- **fail rate bias**: BAM 0.7×, Harmonic 1.4×, Jito 1.0×
+
+Every strategy tick = 1 sim slot. Each MM swap and reader trade fired by `simTick()` is decorated with builder/sim/landed/markout metadata and pushed into the fills table — the strategy and execution views always stay in sync.
+
+### Future live SSE schema
+
+When the bot is wired up to emit per-fill data, send a `fill` event alongside `snapshot`:
+
+```json
+{
+  "kind": "fill",
+  "slot": 420890019,
+  "slot_offset_ms": 142,
+  "builder": "bam",
+  "sig": "5Kpx...d7",
+  "side": "buy",
+  "size_b": 12500,
+  "fee_bps": 28.3,
+  "sim_duration_ms": 0.101,
+  "validate_fees_ms": 0.003,
+  "load_ms": 0.001,
+  "landed_ms": 23.5,
+  "markout_5s_bps": 1.2,
+  "markout_30s_bps": -0.4
+}
+```
 
 ---
 
