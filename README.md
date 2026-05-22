@@ -15,9 +15,12 @@ Research and implementation sandbox for prop AMM, market making, and simulation 
 | [`jupiter-mm-bot/`](jupiter-mm-bot/) | TypeScript MM bot routing via Jupiter |
 | [`order-book-jupiter-mm-bot/`](order-book-jupiter-mm-bot/) | Order-book variant of the Jupiter MM bot |
 | [`zero-slot-bot/`](zero-slot-bot/) | Rust zero-slot execution bot |
-| [`visualization/`](visualization/) | **PAMM Terminal** — live risk cockpit (fee model trace, reader bot, signals). Deploy-ready static site. |
+| [`visualization/`](visualization/) | **PAMM Terminal** — live risk cockpit (fee model trace, reader bot, signals, **Prop AMM Radar** drawer). Deploy-ready static site. |
+| [`flow-aware-ewma/`](flow-aware-ewma/) | EWMA Dynamic Fee **v3** — extends `src/` with an off-chain "flow pressure" signal driven by competitor activity |
+| [`scripts/`](scripts/) | `scan-prop-amm.sh` (enumerate 10 competitors' active pools) + `reverse-mint-offsets.py` (recover account layouts) |
 | [`docs/`](docs/) | Testing guide across all three AMM implementations |
 | [`references/ethereum/`](references/ethereum/) | Solidity port of the strategy, for EVM comparison |
+| [`references/solana/prop-amm/`](references/solana/prop-amm/) | Intel on 10 closed-source Solana prop AMMs — program IDs, account layouts, sample snapshot |
 
 ---
 
@@ -25,7 +28,8 @@ Research and implementation sandbox for prop AMM, market making, and simulation 
 
 1. [`src/lib.rs`](src/lib.rs) — the competition strategy: EWMA vol + shock-decay fee model
 2. [`pinocchio-prop-amm/README.md`](pinocchio-prop-amm/README.md) — end-to-end reference: on-chain program, Jito bot, admin scripts, 16 tests
-3. [`visualization/terminal.html`](visualization/terminal.html) — open in browser: live risk cockpit with fee model trace, reader bot PnL, signal badges. Sim mode runs without any bot.
+3. [`visualization/terminal.html`](visualization/terminal.html) — open in browser: live risk cockpit with fee model trace, reader bot PnL, signal badges. Sim mode runs without any bot. Click **RADAR** in the topbar for competitor pool intel across 10 prop AMMs.
+4. [`references/solana/prop-amm/README.md`](references/solana/prop-amm/README.md) — how the 10-AMM intel layer feeds the radar, the v3 flow signal, and swap-compare's coverage column.
 
 ---
 

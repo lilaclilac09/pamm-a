@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source": "https://gist.github.com/mubarizkyc/959ac9b33dae4f3a86c6e00c331a9901",
+  "verified_at": "2026-05-22",
+  "_comment": "10 closed-source proprietary AMMs on Solana mainnet. account_size is the fixed dataSize used with getProgramAccounts to enumerate pool accounts under each program.",
+  "programs": [
+    { "name": "humidifi", "program_id": "9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp", "account_size": 1728 },
+    { "name": "solfi",    "program_id": "SoLFiHG9TfgtdUXUjWAxi3LtvYuFyDLVhBWxdMZxyCe",  "account_size": 2800 },
+    { "name": "solfiv2",  "program_id": "SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF",  "account_size": 1728 },
+    { "name": "zerofi",   "program_id": "ZERor4xhbUycZ6gb9ntrhqscUcZmAbQDjEAtCf4hbZY",  "account_size": 7456 },
+    { "name": "bisonfi",  "program_id": "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi", "account_size": 2048 },
+    { "name": "obricv2",  "program_id": "obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y",   "account_size": 666 },
+    { "name": "goonfiv2", "program_id": "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",  "account_size": 2048 },
+    { "name": "aquifier", "program_id": "AQU1FRd7papthgdrwPTTq5JacJh8YtwEXaBfKU3bTz45", "account_size": 1056 },
+    { "name": "alphaQ",   "program_id": "ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA", "account_size": 672 },
+    { "name": "tessera",  "program_id": "TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH",  "account_size": 1264 }
+  ]
+}

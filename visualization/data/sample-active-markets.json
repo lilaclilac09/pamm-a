@@ -1,0 +1,43 @@
+{
+  "_comment": "Sample snapshot used by visualization/terminal.html as a fallback when no live scanner output is present. Replace by running scripts/scan-prop-amm.sh which writes to snapshots/ and the dashboard auto-picks the newest.",
+  "generated_at": "2026-05-22T08:00:00Z",
+  "current_slot": 282451200,
+  "active_window_slots": 216000,
+  "by_amm": {
+    "humidifi": [
+      { "pubkey": "Pool1HUMI1111111111111111111111111111111111", "mint1": "So11111111111111111111111111111111111111112", "mint2": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+      { "pubkey": "Pool2HUMI2222222222222222222222222222222222", "mint1": "So11111111111111111111111111111111111111112", "mint2": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN" }
+    ],
+    "solfi": [
+      { "pubkey": "Pool1SOLF1111111111111111111111111111111111", "mint1": "So11111111111111111111111111111111111111112", "mint2": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+      { "pubkey": "Pool2SOLF2222222222222222222222222222222222", "mint1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "mint2": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" },
+      { "pubkey": "Pool3SOLF3333333333333333333333333333333333", "mint1": "So11111111111111111111111111111111111111112", "mint2": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So" }
+    ],
+    "solfiv2": [
+      { "pubkey": "Pool1SOLV1111111111111111111111111111111111", "mint1": "So11111111111111111111111111111111111111112", "mint2": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+      { "pubkey": "Pool2SOLV2222222222222222222222222222222222", "mint1": "So11111111111111111111111111111111111111112", "mint2": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN" }
+    ],
+    "zerofi": [
+      { "pubkey": "Pool1ZERO1111111111111111111111111111111111", "mint1": "So11111111111111111111111111111111111111112", "mint2": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+      { "pubkey": "Pool2ZERO2222222222222222222222222222222222", "mint1": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "mint2": "So11111111111111111111111111111111111111112" }
+    ],
+    "bisonfi": [
+      { "pubkey": "Pool1BISO1111111111111111111111111111111111", "mint1": "So11111111111111111111111111111111111111112", "mint2": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+      { "pubkey": "Pool2BISO2222222222222222222222222222222222", "mint1": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", "mint2": "So11111111111111111111111111111111111111112" }
+    ],
+    "obricv2": [
+      { "pubkey": "Pool1OBRC1111111111111111111111111111111111", "mint1": "So11111111111111111111111111111111111111112", "mint2": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" }
+    ],
+    "goonfiv2": [
+      { "pubkey": "Pool1GOON1111111111111111111111111111111111", "mint1": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "mint2": "So11111111111111111111111111111111111111112" }
+    ],
+    "aquifier": [],
+    "alphaQ": [
+      { "pubkey": "Pool1ALPH1111111111111111111111111111111111", "mint1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "mint2": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" }
+    ],
+    "tessera": [
+      { "pubkey": "Pool1TESS1111111111111111111111111111111111", "mint1": "So11111111111111111111111111111111111111112", "mint2": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+      { "pubkey": "Pool2TESS2222222222222222222222222222222222", "mint1": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",  "mint2": "So11111111111111111111111111111111111111112" }
+    ]
+  }
+}
