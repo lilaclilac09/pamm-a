@@ -1,0 +1,15 @@
+{
+  "_comment": "Common SPL mints used for symbol-decoding in the radar. Extend as needed; missing mints render as base58-truncated.",
+  "mints": {
+    "So11111111111111111111111111111111111111112":  { "symbol": "SOL",  "decimals": 9 },
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": { "symbol": "USDC", "decimals": 6 },
+    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": { "symbol": "USDT", "decimals": 6 },
+    "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN":  { "symbol": "JUP",  "decimals": 6 },
+    "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": { "symbol": "BONK", "decimals": 5 },
+    "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So":  { "symbol": "mSOL", "decimals": 9 },
+    "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm": { "symbol": "WIF",  "decimals": 6 },
+    "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE":  { "symbol": "ORCA", "decimals": 6 },
+    "jitoSoLi7ToayzsZJzn3HNUDPyhWN5cWHzc7VRZSEqj":  { "symbol": "JitoSOL", "decimals": 9 },
+    "PYUSDxxC6tQp7CrgkupkQAm6xZqkKXSDzMr3jbnQQXm":  { "symbol": "PYUSD", "decimals": 6 }
+  }
+}

@@ -220,6 +220,82 @@ table.fills td.src-rdr { font-style: italic; }
 /* color helpers */
 .g{color:var(--green)} .r{color:var(--red)} .b{color:var(--blue)}
 .y{color:var(--yellow)} .p{color:var(--purple)} .t{color:var(--teal)}
+
+/* ── Prop AMM Radar (right-edge slide-out) ─────────────────────────────── */
+#radarToggle {
+  background: var(--panel); color: var(--purple); border: 1px solid var(--b2);
+  font: inherit; font-size: 10px; font-weight: 700;
+  letter-spacing: .15em; text-transform: uppercase;
+  padding: 4px 10px; cursor: pointer; border-radius: 2px; margin-left: auto;
+}
+#radarToggle:hover { color: var(--text); border-color: var(--purple); }
+#radarToggle.armed { color: var(--text); border-color: var(--purple);
+  background: rgba(167,139,250,.08); }
+#radarToggle .dot { width:6px;height:6px;border-radius:50%;display:inline-block;
+  background:var(--dim);margin-right:5px;vertical-align:middle; }
+#radarToggle.armed .dot { background: var(--purple);
+  box-shadow: 0 0 6px var(--purple); }
+
+#radarDrawer {
+  position: fixed; top: 34px; right: 0; bottom: 22px; width: 0;
+  background: var(--panel); border-left: 1px solid var(--b2);
+  transition: width .18s ease; overflow: hidden; z-index: 50;
+  display: flex; flex-direction: column;
+}
+#radarDrawer.open { width: 360px; box-shadow: -16px 0 32px rgba(0,0,0,.4); }
+#radarHdr {
+  flex-shrink: 0; height: 32px; border-bottom: 1px solid var(--b1);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px; color: var(--purple); font-size: 10px; font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase;
+}
+#radarSrc { color: var(--dim); font-size: 9px; letter-spacing: .1em; }
+#radarSrc.live { color: var(--green); }
+#radarClose {
+  background: transparent; color: var(--dim2); border: none; cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 2px 6px;
+}
+#radarClose:hover { color: var(--text); }
+#radarBody { flex: 1; overflow-y: auto; padding: 10px 12px; font-size: 11px; }
+#radarBody::-webkit-scrollbar { width: 3px; }
+#radarBody::-webkit-scrollbar-thumb { background: var(--b2); }
+
+.rstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px; }
+.rstats > div { background: var(--bg); border: 1px solid var(--b1); padding: 5px 7px; border-radius: 2px; }
+.rlbl { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; }
+.rval { font-size: 13px; color: var(--text); font-weight: 700; display: block;
+        font-variant-numeric: tabular-nums; margin-top: 2px; }
+.rsub { font-size: 9.5px; color: var(--dim2); margin-bottom: 10px;
+        font-variant-numeric: tabular-nums; }
+.rsec { font-size: 9px; color: var(--purple); text-transform: uppercase;
+        letter-spacing: .2em; margin: 12px 0 6px; padding-bottom: 3px;
+        border-bottom: 1px solid var(--b1); }
+.rrow {
+  display: grid; grid-template-columns: 78px 1fr 56px; gap: 7px;
+  align-items: center; padding: 3px 0; font-variant-numeric: tabular-nums;
+}
+.rname { color: var(--text); font-size: 10.5px; }
+.rbar { height: 6px; background: var(--b1); border-radius: 1px; overflow: hidden; }
+.rbar > span { display: block; height: 100%; background: var(--purple); }
+.rcount { color: var(--dim2); font-size: 10px; text-align: right; }
+.rdelta { margin-left: 4px; font-size: 9.5px; font-weight: 700; }
+.rdelta.g { color: var(--green); } .rdelta.r { color: var(--red); }
+.rprow {
+  display: grid; grid-template-columns: 100px 30px 1fr; gap: 8px;
+  align-items: center; padding: 3px 0; font-size: 10px;
+}
+.rprow .ppair { color: var(--text); font-weight: 600; }
+.rprow .ppair.warm { color: var(--yellow); }
+.rprow .ppair.hot { color: var(--orange); }
+.rpcount { color: var(--text); font-variant-numeric: tabular-nums;
+           text-align: right; font-weight: 600; }
+.rpamms { color: var(--dim); font-size: 9.5px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rnew { display: inline-block; background: var(--green); color: #052;
+        font-size: 8px; padding: 0 5px; border-radius: 1px; font-weight: 800;
+        letter-spacing: .1em; margin-right: 4px; vertical-align: middle; }
+.rmsg { color: var(--dim); font-size: 10px; padding: 8px 4px; font-style: italic; }
+.rerr { color: var(--red); font-size: 10px; padding: 8px 4px; font-style: italic; }
 </style>
 </head>
 <body>
@@ -242,6 +318,7 @@ table.fills td.src-rdr { font-style: italic; }
   <div class="pill">rpc <span class="v mono" id="tb-rpc">—</span></div>
   <div class="pill">tx <span class="v mono" id="tb-tx">—</span></div>
   <div class="pill">fills <span class="v mono" id="tb-fills">0</span></div>
+  <button id="radarToggle" title="prop-amm radar (10 competitors)"><span class="dot"></span>RADAR</button>
   <span id="tb-mode">SIM MODE</span>
 </div>
 
@@ -493,6 +570,16 @@ table.fills td.src-rdr { font-style: italic; }
   </div>
 
 </div><!-- /exec -->
+
+<!-- ── Prop AMM Radar drawer (slide-out from right edge) ─────────────────── -->
+<aside id="radarDrawer" aria-hidden="true">
+  <div id="radarHdr">
+    <span>Prop AMM Radar</span>
+    <span id="radarSrc">—</span>
+    <button id="radarClose" title="close">×</button>
+  </div>
+  <div id="radarBody"><div class="rmsg">loading…</div></div>
+</aside>
 
 <div id="footer">
   <span>PAMM Terminal</span>
@@ -1167,6 +1254,137 @@ renderExec();
 
 connectSSE();
 setTimeout(()=>{ if(!liveMode&&!simIv) startSim(); },1400);
+
+// ── Prop AMM Radar ──────────────────────────────────────────────────────────
+// Data lives in visualization/data/ (mirror of references/solana/prop-amm/),
+// because Vercel only serves files under visualization/. Refresh the mirror by
+// re-running scripts/scan-prop-amm.sh which writes to references/ then copying
+// active-markets-latest.json across.
+const RADAR_LIVE   = 'data/active-markets-latest.json';
+const RADAR_SAMPLE = 'data/sample-active-markets.json';
+const RADAR_MINTS  = 'data/known-mints.json';
+
+let radarSnap = null, radarPrev = null, radarMints = null;
+
+async function loadRadarMintsOnce() {
+  if (radarMints) return;
+  try {
+    const r = await fetch(RADAR_MINTS, { cache: 'no-cache' });
+    radarMints = r.ok ? await r.json() : { mints: {} };
+  } catch { radarMints = { mints: {} }; }
+}
+
+async function loadRadar() {
+  await loadRadarMintsOnce();
+  let snap = null, src = 'sample';
+  try {
+    const r = await fetch(RADAR_LIVE, { cache: 'no-store' });
+    if (r.ok) { snap = await r.json(); src = 'live'; }
+  } catch {}
+  if (!snap) {
+    try {
+      const r = await fetch(RADAR_SAMPLE, { cache: 'no-cache' });
+      if (r.ok) snap = await r.json();
+    } catch {}
+  }
+  if (!snap) {
+    $('radarBody').innerHTML = '<div class="rerr">no snapshot — run scripts/scan-prop-amm.sh</div>';
+    return;
+  }
+  if (radarSnap && radarSnap.generated_at !== snap.generated_at) {
+    radarPrev = radarSnap;
+  }
+  radarSnap = snap;
+  const tag = $('radarSrc');
+  tag.textContent = src;
+  tag.className = src === 'live' ? 'live' : '';
+  renderRadar();
+}
+
+function radarSymbol(mint) {
+  if (!mint) return '???';
+  const m = radarMints && radarMints.mints && radarMints.mints[mint];
+  return m ? m.symbol : mint.slice(0,4) + '…' + mint.slice(-4);
+}
+function radarPairKey(a, b) { return a < b ? a + '|' + b : b + '|' + a; }
+
+function radarAgg(snap) {
+  const ammCounts = {}; const pairAmms = new Map(); let total = 0;
+  for (const [amm, pools] of Object.entries(snap.by_amm || {})) {
+    ammCounts[amm] = pools.length; total += pools.length;
+    for (const p of pools) {
+      if (!p.mint1 || !p.mint2) continue;
+      const k = radarPairKey(p.mint1, p.mint2);
+      if (!pairAmms.has(k)) pairAmms.set(k, new Set());
+      pairAmms.get(k).add(amm);
+    }
+  }
+  return { ammCounts, pairAmms, total };
+}
+
+function renderRadar() {
+  if (!radarSnap) return;
+  const cur  = radarAgg(radarSnap);
+  const prev = radarPrev ? radarAgg(radarPrev) : null;
+
+  const maxC = Math.max(1, ...Object.values(cur.ammCounts));
+  const ammHtml = Object.entries(cur.ammCounts).sort((a,b)=>b[1]-a[1]).map(([amm,n])=>{
+    const pct = (n / maxC * 100).toFixed(0);
+    const dlt = prev ? (n - (prev.ammCounts[amm] || 0)) : 0;
+    const dchip = dlt === 0 ? '' :
+      '<span class="rdelta ' + (dlt>0?'g':'r') + '">' + (dlt>0?'+':'') + dlt + '</span>';
+    return '<div class="rrow"><span class="rname">'+amm+'</span>'
+         + '<span class="rbar"><span style="width:'+pct+'%"></span></span>'
+         + '<span class="rcount">'+n+dchip+'</span></div>';
+  }).join('');
+
+  const pairs = [...cur.pairAmms.entries()]
+    .map(([k, set]) => ({ k, n: set.size, amms: [...set].sort() }))
+    .sort((a,b)=>b.n-a.n).slice(0, 12);
+  const pairHtml = pairs.map(p => {
+    const [m1, m2] = p.k.split('|');
+    const cls = p.n >= 5 ? 'ppair hot' : p.n >= 3 ? 'ppair warm' : 'ppair';
+    const isNew = prev && !prev.pairAmms.has(p.k) ? '<span class="rnew">NEW</span>' : '';
+    return '<div class="rprow">'
+         + '<span class="'+cls+'">'+radarSymbol(m1)+'/'+radarSymbol(m2)+'</span>'
+         + '<span class="rpcount">'+p.n+'</span>'
+         + '<span class="rpamms">'+isNew+p.amms.join(' · ')+'</span>'
+         + '</div>';
+  }).join('') || '<div class="rmsg">no pairs decoded — check account-layouts.json</div>';
+
+  const age = Math.max(0, Math.round((Date.now() - new Date(radarSnap.generated_at).getTime())/1000));
+  const diff = prev
+    ? 'Δ vs prev: ' + ((cur.total - prev.total) >= 0 ? '+' : '') + (cur.total - prev.total) + ' pools'
+    : 'baseline captured — diff appears on next refresh';
+
+  $('radarBody').innerHTML =
+    '<div class="rstats">'
+    + '<div><span class="rlbl">pools</span><span class="rval">'+cur.total+'</span></div>'
+    + '<div><span class="rlbl">AMMs</span><span class="rval">'+Object.keys(cur.ammCounts).length+'</span></div>'
+    + '<div><span class="rlbl">pairs</span><span class="rval">'+cur.pairAmms.size+'</span></div>'
+    + '<div><span class="rlbl">age</span><span class="rval">'+age+'s</span></div>'
+    + '</div>'
+    + '<div class="rsub">'+diff+'</div>'
+    + '<div class="rsec">AMM pool counts</div>'
+    + '<div class="ramms">'+ammHtml+'</div>'
+    + '<div class="rsec">Top contested pairs</div>'
+    + '<div class="rpairs">'+pairHtml+'</div>';
+}
+
+const radarBtn = $('radarToggle'), radarDr = $('radarDrawer');
+radarBtn.addEventListener('click', () => {
+  const opened = radarDr.classList.toggle('open');
+  radarBtn.classList.toggle('armed', opened);
+  radarDr.setAttribute('aria-hidden', String(!opened));
+  if (opened) loadRadar();
+});
+$('radarClose').addEventListener('click', () => {
+  radarDr.classList.remove('open');
+  radarBtn.classList.remove('armed');
+  radarDr.setAttribute('aria-hidden', 'true');
+});
+// Auto-refresh every 30s while open.
+setInterval(() => { if (radarDr.classList.contains('open')) loadRadar(); }, 30_000);
 </script>
 </body>
 </html>

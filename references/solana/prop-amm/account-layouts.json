@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "source": "https://gist.github.com/mubarizkyc/959ac9b33dae4f3a86c6e00c331a9901",
+  "verified_at": "2026-05-22",
+  "_comment": "Byte offsets into raw account data for the two mint pubkeys (each 32 bytes, little-endian on chain). humidifi and aquifier are not published — run scripts/reverse-mint-offsets.py against a known pool of theirs to fill them in.",
+  "layouts": {
+    "bisonfi":  { "mint1": 184,  "mint2": 216  },
+    "tessera":  { "mint1": 56,   "mint2": 24   },
+    "alphaQ":   { "mint1": 272,  "mint2": 240  },
+    "solfi":    { "mint1": 2696, "mint2": 2664 },
+    "solfiv2":  { "mint1": 88,   "mint2": 56   },
+    "goonfiv2": { "mint1": 112,  "mint2": 80   },
+    "zerofi":   { "mint1": 104,  "mint2": 72   },
+    "obricv2":  { "mint1": 202,  "mint2": 234  },
+    "humidifi": null,
+    "aquifier": null
+  },
+  "reserve_layouts": {
+    "_comment": "TODO — reserve_base and reserve_quote u64 offsets per AMM. Required for TVL / spot-price comparison in swap-compare. Reverse the same way as mints: pick a pool with known TVL on Birdeye, search for u64 LE values matching the known reserve amounts."
+  }
+}
