@@ -1385,6 +1385,9 @@ $('radarClose').addEventListener('click', () => {
 });
 // Auto-refresh every 30s while open.
 setInterval(() => { if (radarDr.classList.contains('open')) loadRadar(); }, 30_000);
+// Deep-link: opening /terminal.html#radar pops the drawer open immediately
+// (useful for sharing a focused view, and for headless screenshot tooling).
+if (location.hash === '#radar') radarBtn.click();
 </script>
 </body>
 </html>
