@@ -1,3 +1,5 @@
+Every agent here accepts work only against [ACCEPTANCE.md](ACCEPTANCE.md) (Aileen's standard). Every task and PR ends with its evidence closer.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
