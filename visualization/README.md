@@ -2,7 +2,9 @@
 
 A single-file risk cockpit for monitoring the prop AMM in real-time.
 
-Live at **[pamm.aileena.xyz](https://pamm.aileena.xyz)** — sim mode runs without any bot.
+Status: LOCAL ONLY — current evidence covers simulated data in a locally served terminal, not live trading; next human action: verify the intended deployment and data feed before relying on it.
+
+Previously advertised URL: **[pamm.aileena.xyz](https://pamm.aileena.xyz)**. Deployment is unverified: the audit VM's `curl` could not resolve the hostname on 2026-11-22. This does not prove a global outage. Sim mode runs without any bot; the walkthrough attached to the audit-fix PR uses simulated data only.
 
 ---
 

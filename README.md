@@ -1,5 +1,7 @@
 # pamm-a
 
+Status: LOCAL ONLY — research implementations and simulated dashboards, with no production deployment verified in this audit; next human action: review the [acceptance audit](notes/acceptance-audit-2026-11-22.md) and validate the selected implementation in a controlled environment before deployment.
+
 Research and implementation sandbox for prop AMM, market making, and simulation on Solana.
 
 ---
@@ -50,11 +52,17 @@ Three parallel protocol implementations, each exploring a different Solana frame
 
 See [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) for build steps across all three implementations.
 
-Competition entry (from repo root):
+There is no root `Cargo.toml`: `src/lib.rs` is competition source, not a standalone root Cargo package. Do not run `cargo build` or `cargo test` from the repo root.
+
+Pinocchio program (LiteSVM integration tests require the SBF artifact at `target/deploy/pinocchio_prop_amm.so`; install the Solana SBF build tool first):
 ```sh
+cd pinocchio-prop-amm/programs/pinocchio-prop-amm
 cargo build
+cargo build-sbf
 cargo test
 ```
+
+Other implementation manifests are in `quasar-prop-amm/` and `anchor-prop-amm/programs/anchor-prop-amm/`. Run framework-specific commands from those directories, not the repo root; the testing guide lists the required Solana/Anchor tools. `flow-aware-ewma/strategy.rs` is reference-only and has no Cargo manifest. The audit's host `cargo test` run failed with the SBF artifact absent; host compilation alone does not build it. Test outcomes are recorded in the audit, not implied by these commands.
 
 ---
 

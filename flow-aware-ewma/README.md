@@ -1,5 +1,7 @@
 # flow-aware-ewma
 
+Status: LOCAL ONLY — reference strategy without a Cargo manifest, not a deployed competition entry; next human action: scope and validate any intended integration before promoting this reference to executable code.
+
 Reference implementation of **EWMA Dynamic Fee v3** — extends [`src/lib.rs`](../src/lib.rs) with an off-chain "flow pressure" signal derived from the prop-AMM radar.
 
 This is **not** the competition submission — `src/` stays locked. v3 is the next iteration if you want to deploy your own pool with the flow hook wired up.
