@@ -1,5 +1,7 @@
 # Pinocchio Prop AMM
 
+Status: LOCAL ONLY — program and bot research code, not a verified production AMM; next human action: review the audit's test results and validate the program/bot together in a controlled environment before deployment.
+
 A PMM (Proactive Market Maker) on Solana. The on-chain program manages a two-token pool with oracle-driven pricing. The off-chain bot keeps the oracle price fresh, rebalances inventory, and captures spread via Jito bundles.
 
 ## How it works
@@ -107,8 +109,10 @@ Pool state is 304 bytes. Key byte offsets:
 
 ```bash
 cd programs/pinocchio-prop-amm
+cargo build-sbf
 cargo test
-# 16/16 pass — covers PMM math, LP mint, oracle validation, TWAP staleness
+# Historical claim: 16/16 pass; not reproduced by the 2026-11-22 audit.
+# Its host test run failed without target/deploy/pinocchio_prop_amm.so.
 ```
 
 To rebuild the `.so` after changing `lib.rs`:

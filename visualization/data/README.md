@@ -1,5 +1,7 @@
 # visualization/data/
 
+Status: LOCAL ONLY — static sample data, not proof of a live market feed; next human action: validate provenance and explicitly choose any intended runtime data source before deployment.
+
 Static data the dashboard fetches at runtime. Mirror of canonical sources in
 [`../../references/solana/prop-amm/`](../../references/solana/prop-amm/) — kept
 here because Vercel only serves files under `visualization/`.

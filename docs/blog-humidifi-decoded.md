@@ -1,5 +1,7 @@
 # Humidifi, Decoded — Part II findings
 
+**Unverified research — ACCEPTANCE.md §2:** all PR #6 measurements, byte classifications, replication statements and pricing-source conclusions in this document are unverified historical claims. The audit has no underlying recording/decoder-output artifacts and did not reproduce these RPC flows. No paid RPC was run. Commands below are recipes, not completed verification; retain the findings as hypotheses until independently supported.
+
 Companion notes for the published article at <https://aileena.xyz/blog/humidifi-decoded>. This file holds the raw technical findings; the article is the readable version.
 
 ## Scope
@@ -28,7 +30,7 @@ Active pools observed during the Part II recording window:
 | `FksffEqnBRixYGR791Qw2MgdU7zNCpHVFYBL4Fa4qVuH` | primary recording target |
 | `DB3sUCP2H4icbeKmK6yb6nUxU5ogbcRHtGuq7W2RoRwW` | cross-validation |
 
-## Byte map
+## Byte map (unverified)
 
 Across 60 snapshots (2-second cadence) on the primary pool, six contiguous ranges showed any change. Total live bytes: **57 of 1728 (3.3%)**.
 
@@ -41,9 +43,9 @@ Across 60 snapshots (2-second cadence) on the primary pool, six contiguous range
 | 672 – 676 | 5  | 0.35 |
 | 680 – 683 | 4  | 0.40 |
 
-Reproduced on the second pool with 6/6 of the same ranges plus 2 additional smaller ranges (688, 800-801) that look instrument-class specific.
+Unverified replication claim from PR #6: the second pool had 6/6 of the same ranges plus 2 smaller ranges (688, 800-801). No trace/output artifact supplied here substantiates that replication or its instrument-class interpretation.
 
-## Structural classification per range
+## Structural classification per range (unverified)
 
 For each range, every u8 / u16-LE / u32-LE / u64-LE offset was classified by its time-series pattern. Top picks:
 
@@ -58,9 +60,9 @@ For each range, every u8 / u16-LE / u32-LE / u64-LE offset was classified by its
 
 The two u16 price-like fields have different magnitudes (~26k and ~28k), so they aren't bid/ask of the same instrument. Most likely they're a (price, depth) pair or two scaled references.
 
-## Negative result: on-chain Pyth correlation is zero
+## Claimed negative result: on-chain Pyth correlation (unverified)
 
-All six Pyth feeds polled (SOL/USD, BTC/USD, ETH/USD, USDC/USD, USDT/USD, BONK/USD) returned constant values across the 120-second window. The legacy v2 push receivers on mainnet are not being refreshed often enough to drive humidifi's tick cadence. Conclusion: **humidifi sources its price from off chain**, not from on-chain Pyth.
+PR #6 claimed all six Pyth feeds (SOL/USD, BTC/USD, ETH/USD, USDC/USD, USDT/USD, BONK/USD) remained constant across a 120-second window. Neither that measurement nor the inference about legacy receivers was reproduced here. The proposed conclusion that Humidifi sources its price off chain is **unverified**, not an established exclusion of every on-chain pricing source.
 
 ## What this unlocks
 

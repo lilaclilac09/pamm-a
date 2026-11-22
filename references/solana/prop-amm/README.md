@@ -1,5 +1,7 @@
 # Solana Prop AMM intel
 
+Status: LOCAL ONLY — static research inputs, not verified current market data; next human action: review provenance and independently validate the selected inputs before operational use.
+
 Static intel for 10 closed-source proprietary AMMs on Solana mainnet. Consumed by:
 
 - [`visualization/terminal.html`](../../../visualization/terminal.html) → "Prop AMM Radar" panel

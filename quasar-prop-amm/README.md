@@ -1,5 +1,7 @@
 # Project Structure and Design Overview
 
+Status: LOCAL ONLY — research implementation, no production deployment verified; next human action: validate the Quasar manifest and framework prerequisites before building or deploying this variant.
+
 See also: docs/structure.md for a detailed breakdown.
 
 ## Directory Structure

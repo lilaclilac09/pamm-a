@@ -1,6 +1,8 @@
 # Anchor Prop AMM
 
-This project implements a production-ready Prop AMM (Automated Market Maker) using the Anchor framework for Solana. It includes both on-chain smart contracts and an off-chain oracle/bot for real-time price updates, bundle submission, and advanced features like dynamic spread and inventory skew.
+Status: LOCAL ONLY — research implementation, not verified production-ready software; next human action: review the Anchor prerequisites and validate the selected flows in a controlled local environment before any deployment.
+
+This project contains a research Prop AMM (Automated Market Maker) implementation using the Anchor framework for Solana. It includes on-chain smart contracts and an off-chain oracle/bot for price updates, bundle submission, and features like dynamic spread and inventory skew. Production readiness has not been established by this audit.
 
 ## Structure
 - `programs/anchor-prop-amm/` — On-chain contract (Anchor)

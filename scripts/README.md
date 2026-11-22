@@ -1,5 +1,9 @@
 # scripts/
 
+Status: LOCAL ONLY — research utilities, not a verified production data service; next human action: review the unverified findings and scope any authorized independent validation before relying on them.
+
+Verification limitation (ACCEPTANCE.md §2): PR #6's reserve/vault coverage and Humidifi recording/decoding claims below are **unverified**. The audit did not receive the underlying trace/output artifacts or reproduce these RPC flows. No paid RPC was used; the commands are reproduction recipes, not evidence that they succeeded.
+
 Helper scripts that feed downstream consumers (radar panel, flow-aware EWMA, swap-compare). Each one stands alone — none are required for the competition submission in `src/`.
 
 ## scan-prop-amm.sh
@@ -52,7 +56,7 @@ Attempts to find `(reserve_x, reserve_y)` offsets inside a pool account via two 
 python3 scripts/auto-reverse-reserves.py --program <PID> --size <DSIZE> --pools 3
 ```
 
-Works cleanly for classic CPMMs. Fails for CLMMs / virtual-reserve AMMs (e.g. aquifier) where the stored values are scaled / Q64.64 fixed-point and don't equal vault balances directly. For TVL display in the dashboard, see `build-vault-registry.py` below — it's the cleaner approach.
+Unverified PR #6 claim: works cleanly for classic CPMMs but fails for CLMMs / virtual-reserve AMMs (e.g. aquifier) where stored values do not equal vault balances. This behavior was not reproduced in this audit. For the proposed TVL approach, see `build-vault-registry.py` below.
 
 ## build-vault-registry.py
 
@@ -63,7 +67,7 @@ python3 scripts/build-vault-registry.py --max-pools-per-amm 50
 # → references/solana/prop-amm/vault-registry.json
 ```
 
-At display time, downstream consumers (dashboard, swap-compare) just read each vault's `amount` via `getAccountInfo` — works uniformly across all 9 transparent prop AMMs, no per-AMM struct knowledge. Humidifi is excluded (its swaps don't touch pool accounts as transferors).
+Unverified PR #6 claim: downstream consumers could read vault `amount` via `getAccountInfo` uniformly across all 9 transparent prop AMMs, excluding Humidifi. Coverage and the Humidifi exclusion rationale were not independently verified; do not treat this as proven current support.
 
 ## humidifi-watch.py / humidifi-decode.py
 
@@ -82,4 +86,4 @@ python3 scripts/humidifi-watch.py --mode analyze --input trace.jsonl
 python3 scripts/humidifi-decode.py --input trace.jsonl
 ```
 
-See `docs/blog-humidifi-decoded.md` for what these recover (~3.3% of the account is live, in 6 narrow ranges; two u16 ticks classify as "price-like", a u64 in the 624-660 range is monotonic). Pick an active humidifi pool — most of the 89 historically-allocated accounts haven't moved in months. Sample by `getSignaturesForAddress` on the program ID to find currently-touched pools.
+See `docs/blog-humidifi-decoded.md` for **unverified PR #6 findings**: ~3.3% live bytes in 6 ranges, two price-like u16 ticks and a monotonic u64. The inactive-account count and sampling observations are also unverified historical claims, not current measurements. Any independently authorized reproduction must select an active pool rather than assume the historical examples remain active.
